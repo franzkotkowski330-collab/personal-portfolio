@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <title>班报表 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+  <style>
+    .multi-row-table { overflow-x: auto; }
+    .multi-row-table input,
+    .multi-row-table select {
+      width: 100%; min-width: 70px; height: 30px;
+      padding: 0 6px; font-size: 12.5px;
+    }
+    .auto-cell input { background: var(--bg-soft); color: var(--text-2); }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const isEdit = params.get('edit') === '1';
+    const isView = params.get('view') === '1';
+    const id = params.get('id');
+    const cfg = MOCK.auxReportConfig;
+
+    const page = renderLayout({
+      activeKey: 'sr-aux',
+      breadcrumb: [
+        { label: '业务工作' },
+        { label: '班报表', href: './auxiliary-list.html' },
+        { label: isView ? '查看' : (isEdit ? '编辑' : '新建') }
+      ]
+    });
+
+    const userName = localStorage.getItem('userName') || '赵六';
+
+    function renderTable(title, rows, fields, key) {
+      return `
+        <div class="card">
+          <div class="card-header"><div class="card-title">${title}</div></div>
+          <div class="multi-row-table">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th style="width:160px">${title.split('（')[0]}名称</th>
+                  ${fields.map(f => `<th style="${f.width ? 'width:' + f.width + 'px' : ''}">${f.required ? '<span class="text-danger">*</span> ' : ''}${f.label}</th>`).join('')}
+                </tr>
+              </thead>
+              <tbody>
+                ${rows.map(r => `
+                  <tr>
+                    <td><b>${r.name}</b> <span class="text-3" style="font-size:12px">${r.unit ? '('+r.unit+')' : ''}</span></td>
+                    ${fields.map(f => `
+                      <td class="${f.auto ? 'auto-cell' : ''}">
+                        <input type="${f.type || 'number'}" ${f.auto ? 'readonly' : ''} ${isView ? 'disabled' : ''}
+                          value="${(isEdit||isView) && f.demo ? f.demo() : ''}" />
+                      </td>
+                    `).join('')}
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderProductRows() {
+      const rows = (isEdit || isView)
+        ? [
+          { name: '阿洛酮糖', spec: '70%浓缩液', output: '12.5' },
+          { name: '阿洛酮糖', spec: '95%晶体', output: '3.2' }
+        ]
+        : [{ name: '', spec: '', output: '' }];
+      return rows.map((row, idx) => productRowHtml(row, idx)).join('');
+    }
+
+    function productRowHtml(row, idx) {
+      return `
+        <tr>
+          <td><input type="text" placeholder="产品名称" value="${row.name || ''}" ${isView ? 'disabled' : ''} /></td>
+          <td><input type="text" placeholder="产品规格" value="${row.spec || ''}" ${isView ? 'disabled' : ''} /></td>
+          <td><input type="number" placeholder="0.00" value="${row.output || ''}" ${isView ? 'disabled' : ''} /></td>
+          <td class="col-actions">
+            ${!isView ? `<button class="btn-text danger" onclick="removeProductRow(this)" ${idx === 0 ? 'disabled style="color:var(--text-disabled);background:transparent;cursor:not-allowed"' : ''}>删除</button>` : '<span class="text-3">—</span>'}
+          </td>
+        </tr>
+      `;
+    }
+
+    page.innerHTML = `
+
+      <div class="card">
+        <div class="card-header"><div class="card-title">表头信息</div></div>
+        <div class="form-row">
+          <div class="form-item">
+            <label class="form-label"><span class="required">*</span> 日期</label>
+            <input type="date" value="2026-05-07" ${isView ? 'disabled' : ''} />
+          </div>
+          <div class="form-item">
+            <label class="form-label"><span class="required">*</span> 班次</label>
+            <select ${isView ? 'disabled' : ''}><option>白班</option><option>夜班</option></select>
+          </div>
+          <div class="form-item">
+            <label class="form-label"><span class="required">*</span> 班组</label>
+            <select ${isView ? 'disabled' : ''}><option>甲班</option><option>乙班</option><option>丙班</option></select>
+          </div>
+          <div class="form-item">
+            <label class="form-label">记录人</label>
+            <input type="text" value="${userName}" disabled />
+          </div>
+        </div>
+      </div>
+
+      ${renderTable('辅料消耗明细（8种）', cfg.auxiliaries, [
+        { label: '昨日结存', required: true, width: 110, demo: () => (Math.random()*100).toFixed(1) },
+        { label: '今日领用', required: true, width: 110, demo: () => (Math.random()*50).toFixed(1) },
+        { label: '今日耗用', required: true, width: 110, demo: () => (Math.random()*30).toFixed(1) },
+        { label: '今日结存', auto: true, width: 110, demo: () => (Math.random()*100).toFixed(1) },
+        { label: '吨耗', width: 110, demo: () => (Math.random()).toFixed(2) }
+      ], 'aux')}
+
+      ${renderTable('原料消耗明细（3种）', cfg.rawMaterials, [
+        { label: '消耗量（吨）', width: 130, demo: () => (Math.random()*20).toFixed(2) },
+        { label: '吨耗', width: 110, demo: () => (Math.random()).toFixed(2) }
+      ], 'raw')}
+
+      ${renderTable('动力消耗明细（5种）', cfg.energy, [
+        { label: '今日耗用', width: 110, demo: () => (Math.random()*80).toFixed(1) },
+        { label: '吨耗', width: 110, demo: () => (Math.random()*2).toFixed(2) }
+      ], 'eng')}
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">蒸发产品信息</div>
+          ${!isView ? '<button class="btn btn-sm btn-primary" onclick="addProductRow()">+ 添加行</button>' : ''}
+        </div>
+        <div class="multi-row-table">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>产品名称</th>
+                <th>产品规格</th>
+                <th>产量（吨）</th>
+                <th class="col-actions">操作</th>
+              </tr>
+            </thead>
+            <tbody id="product-rows">
+              ${renderProductRows()}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><div class="card-title">备注</div></div>
+        <textarea ${isView ? 'disabled' : ''} placeholder="本班次特殊情况说明...">${(isEdit||isView) ? '本班次纯水使用量较平均值偏高约15%，需关注超滤膜清洗周期。' : ''}</textarea>
+      </div>
+
+      ${(isEdit || isView) ? renderOpLog() : ''}
+
+      <div class="text-center" style="padding:8px 0 24px">
+        <button class="btn" onclick="history.back()">${isView ? '返回' : '取消'}</button>
+        ${!isView ? '<button class="btn" onclick="onSave(\'draft\')">保存草稿</button>' : ''}
+        ${!isView ? '<button class="btn btn-primary" onclick="onSave(\'submit\')">正式提交</button>' : ''}
+      </div>
+    `;
+
+    function renderOpLog() {
+      return `
+        <div class="card">
+          <div class="card-header"><div class="card-title">操作记录</div></div>
+          <ul class="timeline">
+            <li><div class="time">2026-05-07 19:50</div><div class="content"><b>赵六</b> · <span class="tag tag-blue">正式提交</span></div></li>
+            <li>
+              <div class="time">2026-05-07 19:30</div>
+              <div class="content">
+                <div><b>赵六</b> · <span class="tag tag-orange">编辑保存</span></div>
+                <div class="diff-row"><span class="field">活性炭-今日耗用：</span><span class="old">15.0</span> → <span class="new">17.5</span></div>
+                <div class="diff-row"><span class="field">蒸发产品-产量：</span><span class="old">12.0</span> → <span class="new">12.5</span></div>
+              </div>
+            </li>
+            <li><div class="time">2026-05-07 16:00</div><div class="content"><b>赵六</b> · <span class="tag tag-green">创建</span></div></li>
+          </ul>
+        </div>
+      `;
+    }
+
+    window.onSave = (mode) => {
+      if (mode === 'draft') toast('草稿已保存', 'success');
+      else { toast('已正式提交，等待车间管理员审核', 'success'); setTimeout(() => location.href = './auxiliary-list.html', 800); }
+    };
+
+    window.addProductRow = () => {
+      const tbody = document.getElementById('product-rows');
+      if (!tbody) return;
+      tbody.insertAdjacentHTML('beforeend', productRowHtml({ name: '', spec: '', output: '' }, tbody.children.length));
+    };
+
+    window.removeProductRow = (btn) => {
+      const tr = btn.closest('tr');
+      const tbody = document.getElementById('product-rows');
+      if (tr && tbody && tbody.children.length > 1) tr.remove();
+    };
+  </script>
+</body>
+</html>

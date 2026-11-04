@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <title>SCADA点位映射 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script>
+    const page = renderLayout({
+      activeKey: 'sys-scada',
+      breadcrumb: [{ label: '系统管理' }, { label: 'SCADA点位映射' }]
+    });
+
+    page.innerHTML = `
+      <div class="card">
+        <div class="filter-bar">
+          <span class="query-field q-w-xl"><label>关键词</label><input type="text" placeholder="点位ID / 字段名" /></span>
+          <span class="query-field q-w-lg"><label>工序</label><select><option>全部工序</option>${MOCK.processes.map(p => `<option>${p.name}</option>`).join('')}</select></span>
+          <span class="query-field q-w-sm"><label>状态</label><select><option>全部状态</option><option>启用</option><option>停用</option></select></span>
+          <span class="filter-actions">
+            <button class="btn">重置</button>
+            <button class="btn btn-primary">查询</button>
+          </span>
+        </div>
+
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>SCADA点位ID</th><th>点位描述</th><th>工序</th><th>设备</th>
+                <th>映射到表单字段</th><th>单位</th><th>启用</th><th class="col-actions">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${MOCK.scadaMappings.map(m => `
+                <tr>
+                  <td><code style="background:var(--bg-soft);padding:2px 6px;border-radius:3px">${m.pointId}</code></td>
+                  <td>${m.desc}</td>
+                  <td>${m.process}</td>
+                  <td>${m.device}</td>
+                  <td><b>${m.formField}</b></td>
+                  <td>${m.unit}</td>
+                  <td><div class="switch ${m.enabled ? 'on' : ''}"></div></td>
+                  <td class="col-actions">
+                    <button class="btn-text">测试拉取</button>
+                    <button class="btn-text">编辑</button>
+                    <button class="btn-text danger">删除</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card" style="border-left:4px solid var(--info)">
+        <div style="font-weight:500;margin-bottom:6px;color:var(--info)">💡 SCADA 集成技术要点</div>
+        <div class="text-2" style="line-height:1.7;font-size:13px">
+          • <b>数据方向</b>：单向（SCADA → 本系统），只读不写入<br/>
+          • <b>触发时机</b>：操作人员在原始记录表填写时间字段后，系统自动触发数据拉取<br/>
+          • <b>时间匹配</b>：取操作人员填写时间前后 ±1 分钟内最近一次SCADA采样值<br/>
+          • <b>降级策略</b>：SCADA 不可用时，对应字段留空并提示，<b>不阻断表单提交</b><br/>
+          • <b>覆盖规则</b>：操作人员可手动覆盖 SCADA 回填值，覆盖后操作记录中标记"SCADA回填→手动修改"
+        </div>
+      </div>
+    `;
+  </script>
+</body>
+</html>

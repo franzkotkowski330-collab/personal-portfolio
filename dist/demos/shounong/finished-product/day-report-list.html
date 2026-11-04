@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>成品日检验报告 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+  <style>
+    .query-card { margin-bottom: 16px; }
+    .query-card .query-fields { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+    .query-field { display: flex; align-items: center; gap: 6px; }
+    .query-field label { font-size: 13px; color: var(--text-2); white-space: nowrap; font-weight: 500; }
+    .table-card { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; }
+    .table-toolbar { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+    .table-toolbar-left { font-size: 13px; color: var(--text-2); }
+    .table-toolbar-right { display: flex; gap: 8px; }
+    .pagination-v2 { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); justify-content: flex-end; }
+    .pagination-v2 .pagination-total { font-size: 13px; color: var(--text-2); margin-right: auto; }
+    .pagination-v2 button { min-width: 32px; height: 32px; border: 1px solid var(--border); border-radius: 4px; background: #fff; cursor: pointer; font-size: 13px; }
+    .pagination-v2 button.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .pagination-v2 button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .pagination-v2 .pagination-size { height: 32px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; padding: 0 8px; }
+    .pagination-v2 .pagination-jumper { font-size: 13px; color: var(--text-2); }
+    .pagination-v2 .pagination-jumper input { width: 48px; height: 32px; text-align: center; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script>
+    const page = renderLayout({
+      activeKey: 'fp-day-report',
+      breadcrumb: [{ label: '业务工作' }, { label: '成品检验' }, { label: '成品日检验报告' }]
+    });
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, s => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[s]));
+    }
+
+    const list = MOCK.finishedProductDayReportList;
+
+    page.innerHTML = `
+      <div class="query-card card">
+        <div class="query-fields">
+          <span class="query-field">
+            <label>检验日期</label>
+            <input type="date" value="2026-05-13" disabled title="原型演示" />
+          </span>
+          <span class="query-field">
+            <label>班次</label>
+            <select disabled><option>全部班次</option></select>
+          </span>
+        </div>
+        <div class="query-actions">
+          <button class="btn" onclick="toast('原型：可对接按日期+班次汇总生成逻辑', 'warning')">生成今日报告</button>
+          <button class="btn btn-primary" onclick="toast('查询与列表联动可后续接入', 'success')">查询</button>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-toolbar">
+          <span class="table-toolbar-left">共 ${list.length} 条</span>
+          <div class="table-toolbar-right">
+            <button class="btn btn-primary" onclick="toast('已导出报告列表', 'success')">导出</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>报告编号</th>
+                <th>检验日期</th>
+                <th>班次</th>
+                <th>班组</th>
+                <th>批号</th>
+                <th>状态</th>
+                <th>纳入记录数</th>
+                <th>记录人</th>
+                <th class="col-actions">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${list.map(r => `
+                <tr>
+                  <td><b>${escapeHtml(r.reportNo)}</b></td>
+                  <td>${escapeHtml(r.inspectDate)}</td>
+                  <td>${escapeHtml(r.shift)}</td>
+                  <td>${escapeHtml(r.team)}</td>
+                  <td>${escapeHtml(r.batchNo)}</td>
+                  <td><span class="tag ${r.status === '已通过' ? 'tag-green' : 'tag-blue'}">${escapeHtml(r.status)}</span></td>
+                  <td>${r.recordCount}</td>
+                  <td>${escapeHtml(r.recorder)}</td>
+                  <td class="col-actions">
+                    <button class="btn-text" onclick="location.href='./day-report-detail.html?id=${encodeURIComponent(r.id)}'">查看详情</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="pagination-v2">
+          <span class="pagination-total">共 ${list.length} 条</span>
+          <select class="pagination-size"><option>100条/页</option><option>200条/页</option><option>300条/页</option><option>400条/页</option></select>
+          <button disabled>«</button><button disabled>‹</button><button class="active">1</button><button>›</button><button>»</button>
+          <span class="pagination-jumper">跳至 <input type="number" min="1" value="1" /> 页</span>
+        </div>
+      </div>
+    `;
+  </script>
+</body>
+</html>

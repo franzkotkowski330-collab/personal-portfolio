@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <title>质检模板配置 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script>
+    const page = renderLayout({
+      activeKey: 'sys-template',
+      breadcrumb: [{ label: '系统管理' }, { label: '质检模板配置' }]
+    });
+
+    let activeTpl = 0;
+
+    function render() {
+      const tpl = MOCK.templates[activeTpl];
+      page.innerHTML = `
+        <div class="two-col">
+          <div class="card" style="position:sticky;top:80px">
+            <div class="card-header"><div class="card-title">表单类型</div></div>
+            ${MOCK.templates.map((t, i) => `
+              <div class="menu-item" style="color:var(--text-1);background:${i === activeTpl ? 'var(--primary-light)' : 'transparent'};border-radius:6px;cursor:pointer;margin-bottom:4px" data-tpl="${i}">
+                ${ICONS.flask}
+                <div>
+                  <div style="font-weight:500;font-size:13px">${t.formType}</div>
+                  <div class="text-3" style="font-size:11px;margin-top:2px">${t.items.length} 项 · ${t.processes.length} 个工序</div>
+                </div>
+              </div>
+            `).join('')}
+            <div class="text-3" style="font-size:12px;margin-top:12px;line-height:1.6">
+              💡 表单类型含发酵工段、中间体（《中间体检验》中按工序分组：中间体1、中间体2）、质检科等，每类配置独立的检验项目
+            </div>
+          </div>
+
+          <div>
+            <div class="card">
+              <div class="card-header"><div class="card-title">${tpl.formType} · 关联工序</div></div>
+              <div class="flex" style="flex-wrap:wrap;gap:6px">
+                ${tpl.processes.map(p => `<span class="tag tag-primary" style="height:auto;padding:4px 12px">${p} ✕</span>`).join('')}
+                <button class="btn btn-sm">+ 添加工序</button>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">检验项目配置 <span class="text-3" style="font-weight:400;font-size:12px">（共 ${tpl.items.length} 项）</span></div>
+                <button class="btn btn-sm btn-primary">+ 添加检验项目</button>
+              </div>
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>检验项目</th>
+                    <th>数据类型</th>
+                    <th>单位</th>
+                    <th>规格下限</th>
+                    <th>规格上限</th>
+                    <th>标准描述</th>
+                    <th>检验频率</th>
+                    <th>必填</th>
+                    <th>启用</th>
+                    <th class="col-actions">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${tpl.items.map(it => `
+                    <tr>
+                      <td><b>${it.name}</b></td>
+                      <td><span class="tag ${it.dataType === '数值型' ? 'tag-blue' : 'tag-orange'}">${it.dataType}</span></td>
+                      <td>${it.unit}</td>
+                      <td>${it.specMin}</td>
+                      <td>${it.specMax}</td>
+                      <td class="text-2" style="max-width:180px">${it.desc}</td>
+                      <td class="text-2" style="font-size:12px">${it.freq}</td>
+                      <td>${it.required ? '<span class="tag tag-red">必填</span>' : '<span class="text-3">否</span>'}</td>
+                      <td><div class="switch ${it.enabled ? 'on' : ''}"></div></td>
+                      <td class="col-actions">
+                        <button class="btn-text">编辑</button>
+                        <button class="btn-text danger">停用</button>
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+
+            <div class="card" style="background:var(--info-light);border-left:4px solid var(--info);box-shadow:none">
+              <div style="font-weight:500;color:var(--info);margin-bottom:6px">💡 模板生效说明</div>
+              <div class="text-2" style="font-size:13px;line-height:1.7">
+                • 模板保存后<b>实时生效</b>，对应的质检表单立即按新模板渲染（不影响已有单据）<br/>
+                • 数据类型（数值型↔文本型）一旦配置不可修改，如需变更须停用旧项目并新增<br/>
+                • 规格上下限将驱动质检表单的输入框校验和红色超规格警示
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      document.querySelectorAll('[data-tpl]').forEach(el => {
+        el.addEventListener('click', () => { activeTpl = +el.getAttribute('data-tpl'); render(); });
+      });
+    }
+    render();
+  </script>
+</body>
+</html>

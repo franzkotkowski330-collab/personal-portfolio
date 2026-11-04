@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <title>通用字典 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+  <link rel="stylesheet" href="../assets/css/process-stage-select.css" />
+  <style>
+    .dict-page, .dict-page * { color: #000; }
+    .dict-page .table th,
+    .dict-page .table td { color: #000; }
+    .dict-page .btn-text { color: #000; }
+    .dict-enum-text { color: #000; line-height: 1.6; }
+    .dict-item-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .dict-drag { cursor: grab; user-select: none; color: #000; padding: 0 4px; }
+    .dict-item-row.dragging { opacity: 0.5; }
+    .dict-item-row.drag-over { border-top: 2px solid #000; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script src="../assets/js/process-stage-select.js"></script>
+  <script src="../assets/js/dictionary-page.js"></script>
+  <script>
+    (function () {
+      function showError(msg) {
+        const root = document.getElementById('app');
+        if (root) {
+          root.innerHTML = '<div class="card" style="padding:24px;color:#000"><b>通用字典加载失败</b><p style="margin-top:8px">' + msg + '</p><button class="btn" onclick="location.reload()">刷新页面</button></div>';
+        }
+      }
+
+      try {
+        if (!window.MOCK || !window.MOCK.dictionaries) {
+          showError('数据未加载，请确认 mock.js 可正常访问。');
+          return;
+        }
+        if (typeof window.renderLayout !== 'function') {
+          showError('布局脚本未加载，请确认 layout.js 可正常访问。');
+          return;
+        }
+        if (typeof window.DictionaryPage === 'undefined') {
+          showError('字典脚本未加载，请确认 dictionary-page.js 可正常访问。');
+          return;
+        }
+
+        const page = window.renderLayout({
+          activeKey: 'basic-dictionaries',
+          breadcrumb: [{ label: '基础数据管理' }, { label: '通用字典' }]
+        });
+
+        if (!page) {
+          showError('页面容器初始化失败。');
+          return;
+        }
+
+        page.innerHTML = `
+          <div class="card dict-page">
+            ${window.DictionaryPage.renderFilterBar()}
+            <div class="table-wrap">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width:120px">序号</th>
+                    <th style="width:200px">字典名称</th>
+                    <th>枚举值</th>
+                    <th class="col-actions">操作</th>
+                  </tr>
+                </thead>
+                <tbody id="dict-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        `;
+
+        setTimeout(function () {
+          try {
+            window.DictionaryPage.initDictPage({ tbodyId: 'dict-tbody', outsideEl: page });
+            const editType = new URLSearchParams(location.search).get('edit');
+            if (editType) {
+              setTimeout(function () {
+                window.DictionaryPage.openDictEditModal(decodeURIComponent(editType));
+              }, 150);
+            }
+          } catch (err) {
+            console.error(err);
+            showError(err.message || String(err));
+          }
+        }, 0);
+      } catch (err) {
+        console.error(err);
+        showError(err.message || String(err));
+      }
+    })();
+  </script>
+</body>
+</html>

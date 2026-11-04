@@ -1,0 +1,21 @@
+# Only the reviewed website and deployment files belong in the public repository.
+*
+!/.gitignore
+!/README.md
+!/server.cjs
+!/start-preview.ps1
+!/.github/
+!/.github/workflows/
+!/.github/workflows/pages.yml
+!/dist/
+!/dist/**
+
+# Never publish local credentials or installed dependencies.
+**/node_modules/
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/*.pfx
+**/.DS_Store
+**/Thumbs.db

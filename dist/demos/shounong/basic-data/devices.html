@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>设备管理 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+  <style>
+    .modal {
+      width: 560px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script>
+    const DEVICE_STORAGE_KEY = 'basicData.devices.v1';
+    const DEVICE_LOG_STORAGE_KEY = 'basicData.deviceLogs.v1';
+
+    let filters = { keyword: '', process: '', enabled: '' };
+    let deviceList = loadDeviceList();
+    let deviceLogs = loadDeviceLogs();
+
+    // 列配置管理
+    const allColumns = [
+      { key: 'code', label: '设备编号' },
+      { key: 'name', label: '设备名称' },
+      { key: 'process', label: '关联工序' }
+    ];
+    const columnManager = createColumnManager('basicData.devices.columns', allColumns);
+
+    const page = renderLayout({
+      activeKey: 'basic-devices',
+      breadcrumb: [{ label: '基础数据管理' }, { label: '设备管理' }]
+    });
+
+    function loadDeviceList() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(DEVICE_STORAGE_KEY) || 'null');
+        if (Array.isArray(saved)) return saved;
+      } catch (e) {}
+      return (MOCK.deviceManagementList || []).map(row => ({ ...row }));
+    }
+
+    function saveDeviceList() {
+      localStorage.setItem(DEVICE_STORAGE_KEY, JSON.stringify(deviceList));
+    }
+
+    function loadDeviceLogs() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(DEVICE_LOG_STORAGE_KEY) || '{}');
+        return { ...(MOCK.deviceManagementLogs || {}), ...(saved || {}) };
+      } catch (e) {
+        return { ...(MOCK.deviceManagementLogs || {}) };
+      }
+    }
+
+    function saveDeviceLogs() {
+      localStorage.setItem(DEVICE_LOG_STORAGE_KEY, JSON.stringify(deviceLogs));
+    }
+
+    function currentUser() {
+      return localStorage.getItem('userName') || '王尚革';
+    }
+
+    function nowText() {
+      const d = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, s => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[s]));
+    }
+
+    function getProcesses() {
+      return [...new Set(deviceList.map(row => row.process).filter(Boolean))];
+    }
+
+    function nextCode() {
+      const nums = deviceList.map(row => Number(row.code)).filter(n => Number.isFinite(n));
+      return String((nums.length ? Math.max(...nums) : 0) + 1);
+    }
+
+    function getFilteredList() {
+      const keyword = filters.keyword.trim().toLowerCase();
+      return deviceList.filter(row => {
+        const hitKeyword = !keyword
+          || row.code.toLowerCase().includes(keyword)
+          || row.name.toLowerCase().includes(keyword)
+          || row.process.toLowerCase().includes(keyword);
+        const hitProcess = !filters.process || row.process === filters.process;
+        const hitEnabled = !filters.enabled || String(row.enabled) === filters.enabled;
+        return hitKeyword && hitProcess && hitEnabled;
+      }).slice().sort((a, b) => Number(a.code) - Number(b.code));
+    }
+
+    function getStats() {
+      const processes = getProcesses();
+      const enabledCount = deviceList.filter(row => row.enabled).length;
+      return { total: deviceList.length, processes: processes.length, enabled: enabledCount, disabled: deviceList.length - enabledCount };
+    }
+
+    function render() {
+      const list = getFilteredList();
+      const processes = getProcesses();
+      const visibleCols = columnManager.getVisibleColumns();
+
+      page.innerHTML = `
+        <div class="card">
+          <div class="filter-bar">
+            <span class="query-field q-w-xl"><label><b>关键词:</b></label><input id="keyword" type="text" placeholder="设备编号 / 名称 / 工序" value="${escapeHtml(filters.keyword)}" /></span>
+            <span class="query-field q-w-lg"><label><b>关联工序:</b></label><select id="process">
+              <option value="">全部</option>
+              ${processes.map(process => `<option value="${escapeHtml(process)}" ${filters.process === process ? 'selected' : ''}>${escapeHtml(process)}</option>`).join('')}
+            </select></span>
+            <span class="query-field q-w-sm"><label><b>状态:</b></label><select id="enabled">
+              <option value="">全部</option>
+              <option value="true" ${filters.enabled === 'true' ? 'selected' : ''}>启用</option>
+              <option value="false" ${filters.enabled === 'false' ? 'selected' : ''}>停用</option>
+            </select></span>
+            <span class="filter-actions">
+              <button class="btn" onclick="resetFilters()">重置</button>
+            <button class="btn btn-primary" onclick="applyFilters()">查询</button>
+            </span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="table-toolbar">
+            <span class="text-3">共 ${list.length} 条</span>
+            <div class="table-toolbar-right">
+              <button class="btn" onclick="openColumnConfig()">配置列表字段</button>
+              <button class="btn" onclick="exportList()">导出</button>
+              <button class="btn btn-primary" onclick="openDeviceEditor()">新增</button>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  ${visibleCols.map(col => `<th>${col.label}</th>`).join('')}
+                  <th class="col-actions">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${list.length ? list.map(row => `
+                  <tr>
+                    ${visibleCols.map(col => {
+                      if (col.key === 'code') {
+                        return `<td><a class="text-primary fw-500" href="./device-detail.html?code=${encodeURIComponent(row.code)}">${escapeHtml(row.code)}</a></td>`;
+                      } else if (col.key === 'name') {
+                        return `<td>${escapeHtml(row.name)}</td>`;
+                      } else {
+                        return `<td>${escapeHtml(row[col.key] || '—')}</td>`;
+                      }
+                    }).join('')}
+                    <td class="col-actions">
+                      <button class="btn-text" onclick="location.href='./device-detail.html?code=${encodeURIComponent(row.code)}'">查看</button>
+                      <button class="btn-text" onclick="openDeviceEditor('${escapeHtml(row.code)}')">编辑</button>
+                      <button class="btn-text danger" onclick="confirmDelete('${escapeHtml(row.code)}')">删除</button>
+                    </td>
+                  </tr>
+                `).join('') : `
+                  <tr><td colspan="${visibleCols.length + 1}"><div class="empty" style="padding:32px">暂无符合条件的设备数据</div></td></tr>
+                `}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="pagination-v2">
+            <span class="pagination-total">共 ${list.length} 条</span>
+            <select class="pagination-size"><option>100条/页</option><option>200条/页</option><option>300条/页</option><option>400条/页</option></select>
+            <button disabled>&laquo;</button><button disabled>&lsaquo;</button><button class="active">1</button><button>&rsaquo;</button><button>&raquo;</button>
+            <span class="pagination-jumper">跳至 <input type="number" min="1" value="1" /> 页</span>
+          </div>
+        </div>
+      `;
+    }
+
+    window.openColumnConfig = function() {
+      columnManager.openConfig(() => render());
+    };
+
+    window.applyFilters = function () {
+      filters = {
+        keyword: document.getElementById('keyword').value,
+        process: document.getElementById('process').value,
+        enabled: document.getElementById('enabled').value
+      };
+      render();
+    };
+
+    window.resetFilters = function () {
+      filters = { keyword: '', process: '', enabled: '' };
+      render();
+    };
+
+    window.exportList = function () {
+      toast('已导出设备管理列表', 'success');
+    };
+
+    function appendLog(code, log) {
+      deviceLogs[code] = deviceLogs[code] || [];
+      deviceLogs[code].unshift(log);
+      saveDeviceLogs();
+    }
+
+    function collectDiff(oldRow, nextRow) {
+      const fields = [
+        { key: 'name', label: '设备名称' },
+        { key: 'process', label: '关联工序' },
+        { key: 'enabled', label: '状态', format: v => v ? '启用' : '停用' }
+      ];
+      return fields
+        .filter(f => oldRow[f.key] !== nextRow[f.key])
+        .map(f => ({
+          field: f.label,
+          old: f.format ? f.format(oldRow[f.key]) : oldRow[f.key],
+          new: f.format ? f.format(nextRow[f.key]) : nextRow[f.key]
+        }));
+    }
+
+    window.openDeviceEditor = function (code) {
+      const editing = !!code;
+      const row = editing
+        ? deviceList.find(item => item.code === code)
+        : { code: nextCode(), name: '', process: '', enabled: true };
+      if (!row) {
+        toast('未找到设备数据', 'error');
+        return;
+      }
+
+      const processOptions = [...new Set([...(MOCK.processManagementList || []).map(p => p.name), ...getProcesses()])];
+      confirmDialog(
+        editing ? '编辑设备' : '新增设备',
+        `
+          <div class="form-row" style="grid-template-columns:1fr 1fr">
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 设备编号</label>
+              <input id="form-code" type="text" ${editing ? 'readonly' : ''} value="${escapeHtml(row.code)}" placeholder="如 63" />
+              <div class="form-help">作为唯一标识，保存后不建议变更</div>
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 设备名称</label>
+              <input id="form-name" type="text" value="${escapeHtml(row.name)}" placeholder="如 A罐" />
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 关联工序</label>
+              <input id="form-process" type="text" list="process-options" value="${escapeHtml(row.process)}" placeholder="如 发酵" />
+              <datalist id="process-options">
+                ${processOptions.map(process => `<option value="${escapeHtml(process)}"></option>`).join('')}
+              </datalist>
+            </div>
+            <div class="form-item">
+              <label class="form-label">状态</label>
+              <select id="form-enabled">
+                <option value="true" ${row.enabled ? 'selected' : ''}>启用</option>
+                <option value="false" ${!row.enabled ? 'selected' : ''}>停用</option>
+              </select>
+            </div>
+          </div>
+        `,
+        () => {
+          const next = {
+            code: document.getElementById('form-code').value.trim(),
+            name: document.getElementById('form-name').value.trim(),
+            process: document.getElementById('form-process').value.trim(),
+            enabled: document.getElementById('form-enabled').value === 'true'
+          };
+
+          if (!next.code || !next.name || !next.process) {
+            toast('请填写设备编号、设备名称和关联工序', 'error');
+            return false;
+          }
+          if (!/^[A-Za-z0-9#_-]+$/.test(next.code)) {
+            toast('设备编号仅支持字母、数字、#、_、-', 'error');
+            return false;
+          }
+
+          const user = currentUser();
+          const time = nowText();
+          if (editing) {
+            const idx = deviceList.findIndex(item => item.code === code);
+            const oldRow = deviceList[idx];
+            const nextRow = { ...oldRow, ...next };
+            const diff = collectDiff(oldRow, nextRow);
+            if (diff.length) {
+              deviceList[idx] = { ...nextRow, updatedBy: user, updatedAt: time };
+              saveDeviceList();
+              appendLog(code, { time, user, action: '编辑保存', type: 'edit', diff });
+            }
+            toast(diff.length ? '已保存设备修改' : '未发现字段变更', diff.length ? 'success' : 'warning');
+          } else {
+            if (deviceList.some(item => item.code === next.code)) {
+              toast('设备编号已存在，请更换编号', 'error');
+              return false;
+            }
+            const newRow = {
+              ...next,
+              creator: user,
+              createdAt: time,
+              updatedBy: user,
+              updatedAt: time
+            };
+            deviceList.unshift(newRow);
+            saveDeviceList();
+            appendLog(next.code, { time, user, action: '创建', type: 'create' });
+            toast('已新增设备', 'success');
+          }
+          render();
+        },
+        editing ? '保存' : '新增'
+      );
+    };
+
+    window.confirmDelete = function (code) {
+      const row = deviceList.find(item => item.code === code);
+      if (!row) {
+        toast('未找到设备数据', 'error');
+        return;
+      }
+      confirmDialog('删除设备', `确定删除设备 <b>${escapeHtml(row.code)} - ${escapeHtml(row.name)}</b>？`, () => {
+        deviceList = deviceList.filter(item => item.code !== code);
+        saveDeviceList();
+        appendLog(code, {
+          time: nowText(),
+          user: currentUser(),
+          action: '删除',
+          type: 'delete',
+          diff: [{ field: '设备', old: `${row.code} - ${row.name}`, new: '已删除' }]
+        });
+        toast('已删除设备', 'success');
+        render();
+      }, '删除');
+    };
+
+    render();
+  </script>
+</body>
+</html>

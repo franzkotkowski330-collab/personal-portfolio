@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <title>新建发酵生产记录 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+  <style>
+    .multi-row-table { overflow-x: auto; }
+    .multi-row-table input,
+    .multi-row-table select {
+      width: 100%; min-width: 70px; height: 30px;
+      padding: 0 6px; font-size: 12.5px;
+    }
+    .scada-cell { position: relative; }
+    .scada-cell::before {
+      content: 'S'; position: absolute;
+      top: 4px; right: 4px; z-index: 2;
+      width: 14px; height: 14px; line-height: 14px; text-align: center;
+      background: var(--info); color: #fff; font-size: 10px; font-weight: 600;
+      border-radius: 3px; pointer-events: none;
+    }
+    .scada-cell input { background: var(--info-light); border-color: var(--info); }
+    .od-chart-wrap { height: 280px; position: relative; padding: 0 8px 8px; }
+    .od-chart-wrap canvas { max-height: 100%; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script src="../assets/js/chart.umd.min.js"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const isEdit = params.get('edit') === '1';
+    const isView = params.get('view') === '1';
+    const id = params.get('id');
+    const cfg = MOCK.fmProductionConfig;
+
+    const page = renderLayout({
+      activeKey: 'fm-production',
+      breadcrumb: [
+        { label: '业务工作' }, { label: '发酵记录' },
+        { label: '发酵生产记录', href: './production-list.html' },
+        { label: isView ? '查看' : (isEdit ? '编辑' : '新建') }
+      ]
+    });
+
+    let level = '20KL发酵罐';
+    const state = {
+      rows: (isEdit || isView) ? generateMockRows(8) : [{}, {}]
+    };
+
+    function generateMockRows(n) {
+      const rows = [];
+      for (let i = 0; i < n; i++) {
+        const t = 8 + i;
+        rows.push({
+          '日期': '2026-05-07',
+          '时间': `${String(t).padStart(2,'0')}:00`,
+          'pH': (6.8 + Math.random() * 0.4).toFixed(2),
+          '转速': '180',
+          '温度': (32 + Math.random()).toFixed(1),
+          '压力': '0.045',
+          'DO': (40 + Math.random() * 10).toFixed(1),
+          'OD': (0.4 + i * 0.05).toFixed(2),
+          '镜检': '正常',
+          '酶活': i === 7 ? '152' : ''
+        });
+      }
+      return rows;
+    }
+
+    function applicableFields() {
+      return cfg.rowFields.filter(f => !f.applies || f.applies.includes(level));
+    }
+
+    function render() {
+      page.innerHTML = `
+
+        <div class="card">
+          <div class="card-header"><div class="card-title">基础信息</div></div>
+          <div class="form-row">
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 培养级别</label>
+              <select onchange="changeLevel(this.value)" ${isView ? 'disabled' : ''}>
+                ${cfg.levels.map(l => `<option ${l === level ? 'selected' : ''}>${l}</option>`).join('')}
+              </select>
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 批次号</label>
+              <input type="text" value="${(isEdit||isView) ? 'F1#-20260507' : ''}" ${isView ? 'disabled' : ''} />
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 班次</label>
+              <select ${isView ? 'disabled' : ''}><option>白班</option><option>夜班</option></select>
+            </div>
+            <div class="form-item">
+              <label class="form-label">班组</label>
+              <select ${isView ? 'disabled' : ''}><option>甲班</option><option>乙班</option><option>丙班</option></select>
+            </div>
+            <div class="form-item">
+              <label class="form-label">记录人</label>
+              <input type="text" value="${localStorage.getItem('userName') || '张三'}" disabled />
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><div class="card-title">初始培养条件 <span class="text-3" style="font-weight:400;font-size:12px">（每批次填写一次）</span></div></div>
+          <div class="form-row">
+            ${cfg.initFields.map(f => `
+              <div class="form-item">
+                <label class="form-label">
+                  ${f.required ? '<span class="required">*</span> ' : ''}${f.name}
+                  ${f.unit ? ` <span class="text-3" style="font-size:12px;font-weight:400">(${f.unit})</span>` : ''}
+                </label>
+                <input type="${f.type}" ${f.step ? `step="${f.step}"` : ''} ${isView ? 'disabled' : ''} />
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              过程时序记录
+              <span class="text-3" style="font-weight:400;font-size:12px">· ${state.rows.length} 行 · 适用字段已根据培养级别动态调整</span>
+            </div>
+            ${!isView ? '<button class="btn btn-sm btn-primary" onclick="addRow()">+ 添加记录行</button>' : ''}
+          </div>
+          <div class="multi-row-table">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th class="row-num" style="width:40px;text-align:center">#</th>
+                  ${applicableFields().map(f => `
+                    <th style="${f.width ? `width:${f.width}px;min-width:${f.width}px` : ''}">
+                      ${f.required ? '<span class="text-danger">*</span> ' : ''}
+                      ${f.name}
+                      ${f.unit ? ` <span class="text-3" style="font-size:11px;font-weight:400">(${f.unit})</span>` : ''}
+                      ${f.scada ? '<span class="scada-badge">⚡ S</span>' : ''}
+                    </th>
+                  `).join('')}
+                  ${!isView ? '<th style="width:60px;text-align:right">操作</th>' : ''}
+                </tr>
+              </thead>
+              <tbody>
+                ${state.rows.map((row, ri) => `
+                  <tr>
+                    <td style="text-align:center;color:var(--text-3)">${ri+1}</td>
+                    ${applicableFields().map(f => `
+                      <td class="${f.scada ? 'scada-cell' : ''}">
+                        ${renderRowCell(f, row, ri)}
+                      </td>
+                    `).join('')}
+                    ${!isView ? `<td>${state.rows.length > 1 ? `<button class="btn-text danger btn-sm" onclick="removeRow(${ri})">删除</button>` : ''}</td>` : ''}
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">OD生产曲线图</div>
+            <span class="text-3" style="font-weight:400;font-size:12px">横轴为时间，纵轴为过程时序记录中的 OD 值（随表格自动更新）</span>
+          </div>
+          <div class="od-chart-wrap">
+            <canvas id="odProductionChart"></canvas>
+            <div id="odChartEmpty" class="text-3" style="display:none;text-align:center;padding:72px 16px">
+              暂无有效 OD 数据，请先在「过程时序记录」中填写时间与 OD。
+            </div>
+          </div>
+        </div>
+
+        ${(isEdit || isView) ? renderOpLog() : ''}
+      `;
+      queueMicrotask(() => updateOdChart());
+    }
+
+    function renderRowCell(f, row, ri) {
+      const val = row[f.name] || '';
+      const dis = isView ? 'disabled' : '';
+      const dataSync = !isView ? ` data-sync-row="${ri}" data-sync-field="${encodeURIComponent(f.name)}" oninput="syncRowFromInput(this)" onchange="syncRowFromInput(this)"` : '';
+      if (f.type === 'select') {
+        return `<select ${dis}${dataSync}>${(f.options || []).map(o => `<option ${val === o ? 'selected' : ''}>${o}</option>`).join('')}</select>`;
+      }
+      const inputType = f.type === 'time' ? 'time' : f.type === 'date' ? 'date' : f.type === 'number' ? 'number' : 'text';
+      return `<input type="${inputType}" value="${val}" ${f.step ? `step="${f.step}"` : ''} ${dis}${dataSync} />`;
+    }
+
+    function renderOpLog() {
+      return `
+        <div class="card">
+          <div class="card-header"><div class="card-title">操作记录</div></div>
+          <ul class="timeline">
+            <li><div class="time">2026-05-07 16:00</div><div class="content"><b>张三</b> · <span class="tag tag-blue">正式提交</span></div></li>
+            <li>
+              <div class="time">2026-05-07 15:00</div>
+              <div class="content">
+                <div><b>张三</b> · <span class="tag tag-orange">追加记录行</span></div>
+                <div class="diff-row">
+                  <span class="field">第8行 - pH：</span><span class="new">7.05（新增）</span>
+                </div>
+                <div class="diff-row">
+                  <span class="field">第8行 - 酶活：</span><span class="new">152（新增）</span>
+                </div>
+              </div>
+            </li>
+            <li>
+              <div class="time">2026-05-07 12:00</div>
+              <div class="content">
+                <div><b>SCADA系统</b> · <span class="tag tag-blue">系统自动回填</span></div>
+                <div class="diff-row">
+                  <span class="field">第5行 - 温度：</span><span class="old">—</span> → <span class="new">32.6</span>
+                </div>
+              </div>
+            </li>
+            <li><div class="time">2026-05-07 08:00</div><div class="content"><b>张三</b> · <span class="tag tag-green">创建</span></div></li>
+          </ul>
+        </div>
+      `;
+    }
+
+    let odChart = null;
+
+    function getOdSeriesFromRows() {
+      const pts = [];
+      state.rows.forEach((row, idx) => {
+        const odRaw = String(row['OD'] ?? '').trim().replace(',', '.');
+        const od = parseFloat(odRaw);
+        if (Number.isNaN(od)) return;
+        const d = String(row['日期'] ?? '').trim();
+        const t = String(row['时间'] ?? '').trim();
+        if (!t) return;
+        const sortKey = d ? `${d}T${t}` : `__${idx}__${t}`;
+        const label = d ? `${d} ${t}` : t;
+        pts.push({ sortKey, label, od });
+      });
+      pts.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+      return { labels: pts.map(p => p.label), values: pts.map(p => p.od) };
+    }
+
+    function updateOdChart() {
+      if (typeof Chart === 'undefined') return;
+      const canvas = document.getElementById('odProductionChart');
+      const emptyEl = document.getElementById('odChartEmpty');
+      if (!canvas || !emptyEl) return;
+      const { labels, values } = getOdSeriesFromRows();
+      if (odChart) {
+        odChart.destroy();
+        odChart = null;
+      }
+      if (!values.length) {
+        canvas.style.display = 'none';
+        emptyEl.style.display = 'block';
+        return;
+      }
+      canvas.style.display = 'block';
+      emptyEl.style.display = 'none';
+      odChart = new Chart(canvas.getContext('2d'), {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: 'OD',
+            data: values,
+            borderColor: '#1677ff',
+            backgroundColor: 'rgba(22, 119, 255, 0.08)',
+            fill: true,
+            tension: 0.25,
+            pointRadius: 4,
+            pointHoverRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: {
+              title: { display: true, text: '时间' },
+              ticks: { maxRotation: 45, minRotation: 0, autoSkip: true, maxTicksLimit: 12 }
+            },
+            y: {
+              title: { display: true, text: 'OD' },
+              beginAtZero: false
+            }
+          }
+        }
+      });
+    }
+
+    window.syncRowFromInput = (el) => {
+      const ri = Number(el.dataset.syncRow);
+      const key = decodeURIComponent(el.dataset.syncField || '');
+      if (!Number.isInteger(ri) || ri < 0 || !state.rows[ri] || !key) return;
+      state.rows[ri][key] = el.value;
+      updateOdChart();
+    };
+
+    window.addRow = () => { state.rows.push({}); render(); };
+    window.removeRow = (i) => { state.rows.splice(i, 1); render(); };
+    window.changeLevel = (v) => { level = v; render(); };
+    window.onSave = (mode) => {
+      if (mode === 'draft') toast('草稿已保存', 'success');
+      else { toast('已正式提交', 'success'); setTimeout(() => location.href = './production-list.html', 800); }
+    };
+
+    render();
+  </script>
+</body>
+</html>

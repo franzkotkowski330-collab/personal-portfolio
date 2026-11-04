@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>金属探测器监控记录 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+  <style>
+    .ccp-sheet {
+      border: 2px solid #1e293b;
+      border-radius: 4px;
+      padding: 16px 20px 24px;
+      background: #fff;
+      max-width: 1100px;
+      font-size: 13px;
+    }
+    .ccp-title { text-align: center; font-size: 18px; font-weight: 700; margin-bottom: 12px; letter-spacing: 1px; }
+    .ccp-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; margin-bottom: 10px; border-bottom: 1px solid #cbd5e1; padding-bottom: 10px; }
+    .ccp-meta-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .ccp-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    .ccp-table th, .ccp-table td { border: 1px solid #1e293b; padding: 8px 6px; text-align: center; vertical-align: middle; }
+    .ccp-table th { background: #f1f5f9; font-weight: 600; }
+    .ccp-table .left { text-align: left; padding-left: 10px; }
+    .ccp-foot { margin-top: 14px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; font-size: 13px; }
+    .tick { color: #16a34a; font-weight: 700; }
+    .cross { color: #dc2626; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const id = params.get('id');
+    const rep = MOCK.finishedProductDayReportList.find(r => r.id === id);
+
+    const page = renderLayout({
+      activeKey: 'fp-day-report',
+      breadcrumb: [
+        { label: '业务工作' },
+        { label: '成品检验' },
+        { label: '成品日检验报告' },
+        { label: '金属探测器报告' }
+      ]
+    });
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, s => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[s]));
+    }
+
+    if (!rep) {
+      page.innerHTML = ``;
+    } else {
+      const [y, m, d] = rep.inspectDate.split('-');
+      const dayShift = rep.shift === '白班' ? '白' : '夜';
+      page.innerHTML = `
+
+        <div class="ccp-sheet">
+          <div class="ccp-title">金属探测器监控记录(CCP)</div>
+          <div class="ccp-meta">
+            <div class="ccp-meta-row"><b>编号：</b>${escapeHtml(rep.formCode)}</div>
+            <div class="ccp-meta-row"><b>批号：</b>${escapeHtml(rep.batchNo)}</div>
+            <div class="ccp-meta-row"><b>日期：</b>${y} 年 ${m} 月 ${d} 日</div>
+            <div class="ccp-meta-row"><b>班次：</b>${escapeHtml(rep.shift)}（${dayShift}班）</div>
+          </div>
+
+          <table class="ccp-table">
+            <tbody>
+              <tr>
+                <th style="width:100px">CCP</th>
+                <th class="left" style="width:100px">显著危害</th>
+                <th class="left">关键限值</th>
+                <th style="width:140px">监控频率</th>
+              </tr>
+              <tr>
+                <td>${escapeHtml(rep.ccpName)}</td>
+                <td class="left">${escapeHtml(rep.hazard)}</td>
+                <td class="left" style="font-size:12px;line-height:1.45">${escapeHtml(rep.criticalLimit)}</td>
+                <td style="font-size:12px;line-height:1.45">${escapeHtml(rep.monitorFreq)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <table class="ccp-table" style="margin-top:14px">
+            <thead>
+              <tr>
+                <th rowspan="2" style="width:80px">时间</th>
+                <th colspan="3">检验情况是否合格</th>
+                <th rowspan="2">产品检验数量/袋</th>
+                <th rowspan="2">产品通过数量/袋</th>
+                <th rowspan="2">异常描述</th>
+                <th rowspan="2">纠偏</th>
+              </tr>
+              <tr>
+                <th>铁（Fe）<br/>1.5mm</th>
+                <th>不锈钢（Sus）<br/>2.0mm</th>
+                <th>Non-Fe<br/>2.0mm</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rep.detailRows.map(r => `
+                <tr>
+                  <td>${escapeHtml(r.time)}</td>
+                  <td>${r.fe15 ? '<span class="tick">√</span>' : '<span class="cross">×</span>'}</td>
+                  <td>${r.sus ? '<span class="tick">√</span>' : '<span class="cross">×</span>'}</td>
+                  <td>${r.nonFe ? '<span class="tick">√</span>' : '<span class="cross">×</span>'}</td>
+                  <td>${escapeHtml(String(r.totalBags))}</td>
+                  <td>${escapeHtml(String(r.passBags))}</td>
+                  <td class="left">${escapeHtml(r.abnormal || '')}</td>
+                  <td class="left">${escapeHtml(r.correction || '')}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+
+          <div style="margin-top:12px;font-size:12px;line-height:1.6">
+            <div><b>备注：</b>${escapeHtml(rep.remark || '—')}</div>
+            <div style="margin-top:6px"><b>说明：</b>${escapeHtml(rep.note)}</div>
+          </div>
+
+          <div class="ccp-foot">
+            <div><b>记录人：</b>${escapeHtml(rep.recorder)}</div>
+            <div><b>审核人：</b>${escapeHtml(rep.reviewer || '________')}</div>
+            <div><b>审核日期：</b>${escapeHtml(rep.reviewDate || '________')}</div>
+          </div>
+        </div>
+      `;
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <title>字典编辑 - 阿洛酮糖生产管理平台</title>
+  <script>
+    (function () {
+      const params = new URLSearchParams(location.search);
+      const type = params.get('type') || '';
+      const url = './dictionaries.html' + (type ? '?edit=' + encodeURIComponent(type) : '');
+      location.replace(url);
+    })();
+  </script>
+</head>
+<body></body>
+</html>

@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <title>用户管理 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script>
+    const page = renderLayout({
+      activeKey: 'sys-users',
+      breadcrumb: [{ label: '系统管理' }, { label: '用户管理' }]
+    });
+
+    page.innerHTML = `
+      <div class="query-card">
+        <div class="query-fields">
+          <span class="query-field q-w-lg">
+            <label>姓名/用户名</label>
+            <input type="text" placeholder="请输入" />
+          </span>
+          <span class="query-field q-w-lg">
+            <label>所属组织</label>
+            <select><option>全部组织</option><option>生产管理部</option><option>发酵车间-甲班</option><option>中间体车间-甲班</option><option>质检科</option></select>
+          </span>
+          <span class="query-field q-w-lg">
+            <label>角色</label>
+            <select><option>全部角色</option>${MOCK.roles.map(r => `<option>${r.name}</option>`).join('')}</select>
+          </span>
+          <span class="query-field q-w-sm">
+            <label>账号状态</label>
+            <select><option>全部状态</option><option>启用</option><option>停用</option></select>
+          </span>
+        </div>
+        <div class="query-actions">
+          <button class="btn">重置</button>
+          <button class="btn btn-primary">查询</button>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-toolbar">
+          <span class="text-3">共 ${MOCK.users.length} 条</span>
+          <div class="flex gap-8">
+            <button class="btn" onclick="toast('配置列表字段', 'info')">配置列表字段</button>
+            <button class="btn">导出</button>
+            <button class="btn btn-primary" onclick="newUser()">新增</button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>用户名</th><th>姓名</th><th>所属组织</th><th>角色</th><th>账号状态</th><th>最后登录</th><th class="col-actions">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${MOCK.users.map(u => `
+                <tr>
+                  <td>${u.username}</td>
+                  <td><div class="flex-center gap-8"><span class="avatar" style="width:24px;height:24px;font-size:11px">${u.name[0]}</span> <b>${u.name}</b></div></td>
+                  <td>${u.org}</td>
+                  <td>${u.roles.map(r => `<span class="tag tag-primary">${r}</span>`).join(' ')}</td>
+                  <td><div class="switch ${u.status ? 'on' : ''}"></div></td>
+                  <td class="text-3">${u.lastLogin}</td>
+                  <td class="col-actions">
+                    <button class="btn-text" onclick="editUser('${u.username}')">编辑</button>
+                    <button class="btn-text" onclick="resetPwd('${u.username}')">重置密码</button>
+                    <button class="btn-text danger">${u.status ? '停用' : '启用'}</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+        <div class="pagination-v2">
+          <span class="pagination-total">共 ${MOCK.users.length} 条</span>
+          <select class="pagination-size"><option>100条/页</option><option>200条/页</option><option>300条/页</option><option>400条/页</option></select>
+          <button disabled>«</button><button disabled>‹</button><button class="active">1</button><button>›</button><button>»</button>
+          <span class="pagination-jumper">跳至 <input type="number" min="1" value="1" /> 页</span>
+        </div>
+      </div>
+    `;
+
+    window.newUser = () => {
+      confirmDialog('新增用户', `
+        <div class="form-row">
+          <div class="form-item"><label class="form-label"><span class="required">*</span> 用户名</label><input type="text" placeholder="如 zhangsan" /></div>
+          <div class="form-item"><label class="form-label"><span class="required">*</span> 姓名</label><input type="text" /></div>
+          <div class="form-item"><label class="form-label">手机号</label><input type="text" /></div>
+          <div class="form-item"><label class="form-label"><span class="required">*</span> 所属组织</label><select><option>请选择</option><option>发酵车间-甲班</option><option>中间体车间-甲班</option><option>质检科</option></select></div>
+          <div class="form-item" style="grid-column:span 2"><label class="form-label"><span class="required">*</span> 角色</label><select><option>请选择</option>${MOCK.roles.map(r => `<option>${r.name}</option>`).join('')}</select></div>
+          <div class="form-item" style="grid-column:span 2"><label class="form-label"><span class="required">*</span> 初始密码</label><input type="text" value="Init@12345" /><div class="form-help">用户首次登录后强制修改</div></div>
+        </div>`, () => toast('用户创建成功，初始密码已发送', 'success'));
+    };
+    window.editUser = (u) => toast('打开 ' + u + ' 的编辑页面', 'success');
+    window.resetPwd = (u) => confirmDialog('重置密码', `确定将 <b>${u}</b> 的密码重置为初始值？重置后该用户下次登录须强制修改密码。`, () => toast('已重置', 'success'));
+  </script>
+</body>
+</html>

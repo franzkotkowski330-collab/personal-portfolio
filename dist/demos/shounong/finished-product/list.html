@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>成品检验记录 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+  <style>
+    .sortable-th { cursor: pointer; user-select: none; }
+    .sortable-th:hover { color: var(--primary); }
+    .sort-mark { margin-left: 4px; color: var(--primary); font-size: 11px; }
+    .field-config { display: grid; grid-template-columns: 1fr 1.1fr; gap: 16px; min-height: 360px; }
+    .field-panel { border: 1px solid var(--border); border-radius: 8px; padding: 12px; background: var(--bg-soft); }
+    .field-panel-title { font-weight: 600; margin-bottom: 10px; font-size: 13px; }
+    .field-check-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .field-check-list label {
+      display: flex; align-items: center; gap: 6px;
+      padding: 7px 8px; border: 1px solid var(--border); border-radius: 6px;
+      background: #fff; font-size: 12.5px;
+    }
+    .selected-fields { display: flex; flex-direction: column; gap: 8px; }
+    .selected-field {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 10px; border: 1px solid var(--border);
+      border-radius: 6px; background: #fff;
+    }
+    .selected-field .drag-handle { color: var(--text-3); cursor: grab; }
+    .selected-field .name { flex: 1; font-weight: 500; font-size: 13px; }
+    .field-meta { color: var(--text-3); font-size: 12px; }
+    .modal { width: 820px; }
+    .pass-ok { color: var(--success); font-weight: 700; }
+    .pass-bad { color: var(--danger); font-weight: 700; }
+    .query-card { margin-bottom: 16px; }
+    .query-card .query-fields { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+    .query-field { display: flex; align-items: center; gap: 6px; }
+    .query-field label { font-size: 13px; color: var(--text-2); white-space: nowrap; font-weight: 500; }
+    .table-card { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; }
+    .table-toolbar { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+    .table-toolbar-left { font-size: 13px; color: var(--text-2); }
+    .table-toolbar-right { display: flex; gap: 8px; }
+    .pagination-v2 { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); justify-content: flex-end; }
+    .pagination-v2 .pagination-total { font-size: 13px; color: var(--text-2); margin-right: auto; }
+    .pagination-v2 button { min-width: 32px; height: 32px; border: 1px solid var(--border); border-radius: 4px; background: #fff; cursor: pointer; font-size: 13px; }
+    .pagination-v2 button.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .pagination-v2 button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .pagination-v2 .pagination-size { height: 32px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; padding: 0 8px; }
+    .pagination-v2 .pagination-jumper { font-size: 13px; color: var(--text-2); }
+    .pagination-v2 .pagination-jumper input { width: 48px; height: 32px; text-align: center; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script>
+    const FIELDS = MOCK.finishedProductInspectionFields;
+    const STORAGE_KEY = 'finishedProductInspection.visibleFields.v1';
+    const allFieldKeys = FIELDS.map(f => f.key);
+    let visibleKeys = loadVisibleKeys();
+    let sortState = { key: 'createdAt', dir: 'desc' };
+    let filters = { keyword: '', start: '', end: '', shift: '', team: '', result: '', status: '' };
+
+    const page = renderLayout({
+      activeKey: 'fp-record-list',
+      breadcrumb: [{ label: '业务工作' }, { label: '成品检验' }, { label: '成品检验记录' }]
+    });
+
+    function loadVisibleKeys() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+        if (Array.isArray(saved) && saved.length) {
+          return saved.filter(k => allFieldKeys.includes(k));
+        }
+      } catch (e) {}
+      return allFieldKeys.slice();
+    }
+
+    function saveVisibleKeys(keys) {
+      visibleKeys = keys.filter(k => allFieldKeys.includes(k));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(visibleKeys));
+    }
+
+    function fieldOf(key) {
+      return FIELDS.find(f => f.key === key);
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, s => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[s]));
+    }
+
+    function parseTime(value) {
+      return new Date(String(value).replace(' ', 'T')).getTime() || 0;
+    }
+
+    function normalizeDateTimeInput(value) {
+      return value ? value.replace('T', ' ') : '';
+    }
+
+    function fpStatusTag(s) {
+      const map = {
+        草稿: 'tag-orange',
+        待审核: 'tag-blue',
+        已通过: 'tag-green',
+        已驳回: 'tag-red'
+      };
+      const cls = map[s] || 'tag-orange';
+      return `<span class="tag ${cls}">${escapeHtml(s || '—')}</span>`;
+    }
+
+    function formatValue(row, field) {
+      if (field.key === 'id') {
+        return `<a class="text-primary fw-500" href="./detail.html?id=${encodeURIComponent(row.id)}">${escapeHtml(row.id)}</a>`;
+      }
+      if (field.key === 'inspectResult') {
+        return row.inspectResult === '正常'
+          ? '<span class="pass-ok">✓ 正常</span>'
+          : '<span class="pass-bad">✗ 异常</span>';
+      }
+      if (field.key === 'status') return fpStatusTag(row.status);
+      if (field.key === 'linkedReport') {
+        const v = row.linkedReport;
+        if (v && v !== '—' && String(v).startsWith('FPR-')) {
+          return `<a class="text-primary" href="./day-report-detail.html?id=${encodeURIComponent(v)}">${escapeHtml(v)}</a>`;
+        }
+        return escapeHtml(v || '—');
+      }
+      if (field.unit && row[field.key] !== undefined && row[field.key] !== '') {
+        return `${escapeHtml(row[field.key])}${field.unit}`;
+      }
+      return escapeHtml(row[field.key] || '—');
+    }
+
+    function getFilteredList() {
+      const keyword = filters.keyword.trim().toLowerCase();
+      let list = MOCK.finishedProductInspectionList.filter(row => {
+        const hitKeyword = !keyword
+          || row.id.toLowerCase().includes(keyword)
+          || String(row.batchNo || '').toLowerCase().includes(keyword);
+        const hitStart = !filters.start || parseTime(row.inspectTime) >= parseTime(normalizeDateTimeInput(filters.start));
+        const hitEnd = !filters.end || parseTime(row.inspectTime) <= parseTime(normalizeDateTimeInput(filters.end));
+        const hitShift = !filters.shift || row.shift === filters.shift;
+        const hitTeam = !filters.team || row.team === filters.team;
+        const hitResult = !filters.result || row.inspectResult === filters.result;
+        const hitStatus = !filters.status || row.status === filters.status;
+        return hitKeyword && hitStart && hitEnd && hitShift && hitTeam && hitResult && hitStatus;
+      });
+
+      list = list.slice().sort((a, b) => {
+        const f = fieldOf(sortState.key);
+        const av = f && (f.type === 'datetime' || f.type === 'datetime-local')
+          ? parseTime(a[sortState.key])
+          : String(a[sortState.key] || '');
+        const bv = f && (f.type === 'datetime' || f.type === 'datetime-local')
+          ? parseTime(b[sortState.key])
+          : String(b[sortState.key] || '');
+        const ret = av > bv ? 1 : av < bv ? -1 : 0;
+        return sortState.dir === 'asc' ? ret : -ret;
+      });
+      return list;
+    }
+
+    function renderHeaderCell(field) {
+      if (!field.sortable) return `<th>${field.label}</th>`;
+      const mark = sortState.key === field.key ? `<span class="sort-mark">${sortState.dir === 'asc' ? '↑' : '↓'}</span>` : '';
+      return `<th class="sortable-th" onclick="sortBy('${field.key}')">${field.label}${mark}</th>`;
+    }
+
+    function render() {
+      const fields = visibleKeys.map(fieldOf).filter(Boolean);
+      const list = getFilteredList();
+      page.innerHTML = `
+        <div class="query-card card">
+          <div class="query-fields">
+            <span class="query-field q-w-md">
+              <label>记录编号</label>
+              <input id="keyword" type="text" placeholder="请输入记录编号" value="${escapeHtml(filters.keyword)}" />
+            </span>
+            <span class="query-field q-w-range">
+              <label>检验时间</label>
+              <input id="start" type="datetime-local" value="${escapeHtml(filters.start)}" title="检验时间起" />
+              <span class="date-sep">至</span>
+              <input id="end" type="datetime-local" value="${escapeHtml(filters.end)}" title="检验时间止" />
+            </span>
+            <span class="query-field">
+              <label>班次</label>
+              <select id="shift">
+                <option value="">全部班次</option>
+                <option ${filters.shift === '白班' ? 'selected' : ''}>白班</option>
+                <option ${filters.shift === '夜班' ? 'selected' : ''}>夜班</option>
+              </select>
+            </span>
+            <span class="query-field">
+              <label>班组</label>
+              <select id="team">
+                <option value="">全部班组</option>
+                <option ${filters.team === '甲班' ? 'selected' : ''}>甲班</option>
+                <option ${filters.team === '乙班' ? 'selected' : ''}>乙班</option>
+                <option ${filters.team === '丙班' ? 'selected' : ''}>丙班</option>
+              </select>
+            </span>
+            <span class="query-field">
+              <label>检验结果</label>
+              <select id="result">
+                <option value="">全部检验结果</option>
+                <option ${filters.result === '正常' ? 'selected' : ''}>正常</option>
+                <option ${filters.result === '异常' ? 'selected' : ''}>异常</option>
+              </select>
+            </span>
+            <span class="query-field">
+              <label>状态</label>
+              <select id="status">
+                <option value="">全部状态</option>
+                <option value="草稿" ${filters.status === '草稿' ? 'selected' : ''}>草稿</option>
+                <option value="待审核" ${filters.status === '待审核' ? 'selected' : ''}>待审核</option>
+                <option value="已通过" ${filters.status === '已通过' ? 'selected' : ''}>已通过</option>
+                <option value="已驳回" ${filters.status === '已驳回' ? 'selected' : ''}>已驳回</option>
+              </select>
+            </span>
+          </div>
+          <div class="query-actions">
+            <button class="btn" onclick="resetFilters()">重置</button>
+            <button class="btn btn-primary" onclick="applyFilters()">查询</button>
+          </div>
+        </div>
+
+        <div class="table-card">
+          <div class="table-toolbar">
+            <span class="table-toolbar-left">共 ${list.length} 条 · 当前显示 ${fields.length}/${FIELDS.length} 个字段</span>
+            <div class="table-toolbar-right">
+              <button class="btn" onclick="openFieldConfig()">配置列表字段</button>
+              <button class="btn" onclick="toast('已导出成品检验记录', 'success')">导出</button>
+              <button class="btn btn-primary" onclick="location.href='./new.html'">新增</button>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  ${fields.map(renderHeaderCell).join('')}
+                  <th class="col-actions">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${list.length ? list.map(row => `
+                  <tr ${row.inspectResult === '异常' ? 'style="background:var(--danger-light)"' : ''}>
+                    ${fields.map(f => `<td>${formatValue(row, f)}</td>`).join('')}
+                    <td class="col-actions">
+                      <button class="btn-text" onclick="location.href='./detail.html?id=${encodeURIComponent(row.id)}'">查看</button>
+                      <button class="btn-text" onclick="location.href='./new.html?id=${encodeURIComponent(row.id)}&edit=1'">编辑</button>
+                      <button class="btn-text danger" onclick="confirmDel('${escapeHtml(row.id)}')">删除</button>
+                    </td>
+                  </tr>
+                `).join('') : `
+                  <tr><td colspan="${fields.length + 1}"><div class="empty" style="padding:32px">暂无符合条件的数据</div></td></tr>
+                `}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="pagination-v2">
+            <span class="pagination-total">共 ${list.length} 条 · 当前显示 ${fields.length}/${FIELDS.length} 个字段</span>
+            <select class="pagination-size"><option>100条/页</option><option>200条/页</option><option>300条/页</option><option>400条/页</option></select>
+            <button disabled>«</button><button disabled>‹</button><button class="active">1</button><button>›</button><button>»</button>
+            <span class="pagination-jumper">跳至 <input type="number" min="1" value="1" /> 页</span>
+          </div>
+        </div>
+      `;
+    }
+
+    window.applyFilters = function () {
+      filters = {
+        keyword: document.getElementById('keyword').value,
+        start: document.getElementById('start').value,
+        end: document.getElementById('end').value,
+        shift: document.getElementById('shift').value,
+        team: document.getElementById('team').value,
+        result: document.getElementById('result').value,
+        status: document.getElementById('status').value
+      };
+      render();
+    };
+
+    window.resetFilters = function () {
+      filters = { keyword: '', start: '', end: '', shift: '', team: '', result: '', status: '' };
+      sortState = { key: 'createdAt', dir: 'desc' };
+      render();
+    };
+
+    window.sortBy = function (key) {
+      sortState = sortState.key === key
+        ? { key, dir: sortState.dir === 'asc' ? 'desc' : 'asc' }
+        : { key, dir: 'asc' };
+      render();
+    };
+
+    window.confirmDel = function (id) {
+      confirmDialog('删除成品检验记录', `确定删除记录 <b>${escapeHtml(id)}</b>？`, () => {
+        toast('已删除成品检验记录', 'success');
+      });
+    };
+
+    function selectedFieldHtml(keys) {
+      return keys.map((key, idx) => {
+        const f = fieldOf(key);
+        return `
+          <div class="selected-field" draggable="true" data-key="${key}">
+            <span class="drag-handle">☰</span>
+            <span class="name">${f.label}</span>
+            <span class="field-meta">${idx + 1}</span>
+            <button class="btn btn-sm" onclick="moveFieldInModal('${key}', -1)">上移</button>
+            <button class="btn btn-sm" onclick="moveFieldInModal('${key}', 1)">下移</button>
+          </div>
+        `;
+      }).join('');
+    }
+
+    window.syncSelectedFields = function () {
+      const checked = Array.from(document.querySelectorAll('[data-field-check]:checked')).map(x => x.value);
+      const current = Array.from(document.querySelectorAll('.selected-field')).map(x => x.dataset.key);
+      const ordered = current.filter(k => checked.includes(k)).concat(checked.filter(k => !current.includes(k)));
+      document.getElementById('selected-fields').innerHTML = selectedFieldHtml(ordered);
+      bindModalDrag();
+    };
+
+    window.moveFieldInModal = function (key, step) {
+      const list = Array.from(document.querySelectorAll('.selected-field')).map(x => x.dataset.key);
+      const idx = list.indexOf(key);
+      const next = idx + step;
+      if (idx < 0 || next < 0 || next >= list.length) return;
+      [list[idx], list[next]] = [list[next], list[idx]];
+      document.getElementById('selected-fields').innerHTML = selectedFieldHtml(list);
+      bindModalDrag();
+    };
+
+    function bindModalDrag() {
+      document.querySelectorAll('.selected-field').forEach(el => {
+        el.addEventListener('dragstart', e => e.dataTransfer.setData('text/plain', el.dataset.key));
+        el.addEventListener('dragover', e => e.preventDefault());
+        el.addEventListener('drop', e => {
+          e.preventDefault();
+          const from = e.dataTransfer.getData('text/plain');
+          const to = el.dataset.key;
+          const list = Array.from(document.querySelectorAll('.selected-field')).map(x => x.dataset.key);
+          const fromIdx = list.indexOf(from);
+          const toIdx = list.indexOf(to);
+          if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return;
+          list.splice(toIdx, 0, list.splice(fromIdx, 1)[0]);
+          document.getElementById('selected-fields').innerHTML = selectedFieldHtml(list);
+          bindModalDrag();
+        });
+      });
+    }
+
+    window.openFieldConfig = function () {
+      const content = `
+        <div class="field-config">
+          <div class="field-panel">
+            <div class="field-panel-title">全部字段 <span class="field-meta">支持多选</span></div>
+            <label style="display:flex;gap:6px;margin-bottom:10px;font-size:13px">
+              <input type="checkbox" onchange="document.querySelectorAll('[data-field-check]').forEach(x => x.checked = this.checked); syncSelectedFields()" ${visibleKeys.length === FIELDS.length ? 'checked' : ''} />
+              全部
+            </label>
+            <div class="field-check-list">
+              ${FIELDS.map(f => `
+                <label>
+                  <input data-field-check type="checkbox" value="${f.key}" onchange="syncSelectedFields()" ${visibleKeys.includes(f.key) ? 'checked' : ''} />
+                  <span>${f.label}</span>
+                </label>
+              `).join('')}
+            </div>
+          </div>
+          <div class="field-panel">
+            <div class="field-panel-title">列表显示字段 <span class="field-meta">拖拽或按钮调整顺序</span></div>
+            <div id="selected-fields" class="selected-fields">${selectedFieldHtml(visibleKeys)}</div>
+          </div>
+        </div>
+      `;
+      confirmDialog('配置列表字段', content, () => {
+        const keys = Array.from(document.querySelectorAll('.selected-field')).map(x => x.dataset.key);
+        if (!keys.length) {
+          toast('请至少保留一列', 'warning');
+          return false;
+        }
+        saveVisibleKeys(keys);
+        toast('已保存列表字段配置', 'success');
+        render();
+      }, '保存');
+      setTimeout(bindModalDrag, 0);
+    };
+
+    render();
+  </script>
+</body>
+</html>

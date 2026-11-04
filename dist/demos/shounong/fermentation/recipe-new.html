@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <title>新建发酵配料表 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const isEdit = params.get('edit') === '1';
+    const isView = params.get('view') === '1';
+    const id = params.get('id');
+
+    const page = renderLayout({
+      activeKey: 'fm-recipe',
+      breadcrumb: [
+        { label: '业务工作' }, { label: '发酵记录' },
+        { label: '发酵配料表', href: './recipe-list.html' },
+        { label: isView ? '查看' : (isEdit ? '编辑' : '新建') }
+      ]
+    });
+
+    // Mock配料明细
+    const recipes = (isEdit || isView) ? [
+      { name: '酵母粉', conc: '—', std: 200, actual: 200, vendor: '安琪', batch: 'YA20260501', remark: '' },
+      { name: '胰蛋白胨', conc: '—', std: 100, actual: 99.5, vendor: 'BD', batch: 'BD20260420', remark: '' },
+      { name: '氯化钠', conc: '—', std: 50, actual: 50, vendor: '中盐', batch: 'NA20260318', remark: '' },
+      { name: '玉米浆干粉', conc: '—', std: 30, actual: 30, vendor: '诸城兴贸', batch: 'YJ20260225', remark: '' },
+      { name: '磷酸氢二钾', conc: '—', std: 20, actual: 20, vendor: '河北鑫海', batch: 'KP20260311', remark: '' }
+    ] : [{ name: '', conc: '', std: '', actual: '', vendor: '', batch: '', remark: '' }];
+
+    const userName = localStorage.getItem('userName') || '张三';
+    const state = { recipes };
+
+    function render() {
+      page.innerHTML = `
+
+        <div class="card">
+          <div class="card-header"><div class="card-title">表头信息</div></div>
+          <div class="form-row">
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 配置时间</label>
+              <input type="datetime-local" value="2026-05-07T06:30" ${isView ? 'disabled' : ''} />
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 配置人</label>
+              <input type="text" value="${userName}" ${isView ? 'disabled' : ''} />
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 体积（L）</label>
+              <input type="number" value="${(isEdit||isView) ? '20000' : ''}" ${isView ? 'disabled' : ''} />
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 培养级别</label>
+              <select ${isView ? 'disabled' : ''}>
+                <option>20L种子罐</option>
+                <option>一级种子罐</option>
+                <option>二级种子罐</option>
+                <option ${(isEdit||isView) ? 'selected' : ''}>发酵罐底料</option>
+                <option>发酵罐补料</option>
+              </select>
+            </div>
+            <div class="form-item">
+              <label class="form-label">批次号</label>
+              <input type="text" value="${(isEdit||isView) ? 'F1#-20260507' : ''}" ${isView ? 'disabled' : ''} />
+            </div>
+            <div class="form-item">
+              <label class="form-label">班组</label>
+              <select ${isView ? 'disabled' : ''}><option>甲班</option><option>乙班</option><option>丙班</option></select>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">配料明细 <span class="text-3" style="font-weight:400;font-size:12px">· 共 ${state.recipes.length} 项</span></div>
+            ${!isView ? '<button class="btn btn-sm btn-primary" onclick="addRow()">+ 添加配料</button>' : ''}
+          </div>
+          <table class="table">
+            <thead>
+              <tr>
+                <th class="row-num">#</th>
+                <th><span class="text-danger">*</span> 配料名称</th>
+                <th>浓度</th>
+                <th>标准重量 (kg)</th>
+                <th><span class="text-danger">*</span> 实际重量 (kg)</th>
+                <th>厂家</th>
+                <th>批号</th>
+                <th>备注</th>
+                ${!isView ? '<th style="width:80px">操作</th>' : ''}
+              </tr>
+            </thead>
+            <tbody>
+              ${state.recipes.map((r, i) => `
+                <tr>
+                  <td class="row-num" style="text-align:center;color:var(--text-3)">${i+1}</td>
+                  <td><input type="text" value="${r.name||''}" ${isView ? 'disabled' : ''} placeholder="如：酵母粉" /></td>
+                  <td><input type="text" value="${r.conc||''}" ${isView ? 'disabled' : ''} /></td>
+                  <td><input type="number" value="${r.std||''}" ${isView ? 'disabled' : ''} /></td>
+                  <td><input type="number" value="${r.actual||''}" ${isView ? 'disabled' : ''} /></td>
+                  <td><input type="text" value="${r.vendor||''}" ${isView ? 'disabled' : ''} /></td>
+                  <td><input type="text" value="${r.batch||''}" ${isView ? 'disabled' : ''} /></td>
+                  <td><input type="text" value="${r.remark||''}" ${isView ? 'disabled' : ''} /></td>
+                  ${!isView ? `<td>${state.recipes.length > 1 ? `<button class="btn-text danger btn-sm" onclick="removeRow(${i})">删除</button>` : ''}</td>` : ''}
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+
+        ${(isEdit || isView) ? renderOpLog() : ''}
+      `;
+    }
+
+    function renderOpLog() {
+      return `
+        <div class="card">
+          <div class="card-header"><div class="card-title">操作记录 <span class="text-3" style="font-weight:400;font-size:12px">· 字段级变更追踪</span></div></div>
+          <ul class="timeline">
+            <li>
+              <div class="time">2026-05-07 06:50</div>
+              <div class="content">
+                <div><b>张三</b> · <span class="tag tag-blue">正式提交</span></div>
+              </div>
+            </li>
+            <li>
+              <div class="time">2026-05-07 06:35</div>
+              <div class="content">
+                <div><b>张三</b> · <span class="tag tag-orange">编辑保存</span></div>
+                <div class="diff-row">
+                  <span class="field">第2行 - 实际重量：</span>
+                  <span class="old">100</span> → <span class="new">99.5</span>
+                </div>
+              </div>
+            </li>
+            <li>
+              <div class="time">2026-05-07 06:30</div>
+              <div class="content"><b>张三</b> · <span class="tag tag-green">创建</span></div>
+            </li>
+          </ul>
+        </div>
+      `;
+    }
+
+    window.addRow = () => { state.recipes.push({ name:'', conc:'', std:'', actual:'', vendor:'', batch:'', remark:'' }); render(); };
+    window.removeRow = (i) => { state.recipes.splice(i, 1); render(); };
+    window.onSave = (mode) => {
+      if (mode === 'draft') toast('草稿已保存', 'success');
+      else { toast('已正式提交', 'success'); setTimeout(()=>location.href='./recipe-list.html', 800); }
+    };
+
+    render();
+  </script>
+</body>
+</html>

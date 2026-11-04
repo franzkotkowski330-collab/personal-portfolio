@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <title>基础数据管理 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script>
+    const tabs = [
+      { key: 'processes', menuKey: 'process-management', label: '工序管理' },
+      { key: 'devices', menuKey: 'basic-devices', label: '设备管理' },
+      { key: 'units', menuKey: 'basic-units', label: '单位管理', href: './units.html' },
+      { key: 'dictionaries', menuKey: 'basic-dictionaries', label: '通用字典', href: './dictionaries.html' },
+      { key: 'inspectionItems', menuKey: 'basic-inspection-items', label: '检验项目管理' }
+    ];
+    const params = new URLSearchParams(location.search);
+    const tabFromUrl = params.get('tab') || (location.hash ? location.hash.replace(/^#/, '') : '');
+    if (tabFromUrl === 'dictionaries') {
+      location.replace('./dictionaries.html');
+    }
+    let active = tabs.some(t => t.key === tabFromUrl) ? tabFromUrl : 'processes';
+    const activeTab = () => tabs.find(t => t.key === active) || tabs[0];
+    const page = renderLayout({
+      activeKey: activeTab().menuKey,
+      breadcrumb: [{ label: '基础数据管理' }, { label: activeTab().label }]
+    });
+
+    function render() {
+      const tabBar = `
+        <div class="tabs">
+          ${tabs.map(t => '<div class="tab ' + (t.key === active ? 'active' : '') + '" onclick="' + (t.href ? ("location.href='" + t.href + "'") : ("switchTab('" + t.key + "')")) + '">' + t.label + '</div>').join('')}
+        </div>
+      `;
+      page.innerHTML = `
+        ${tabBar}
+        <div class="card">
+          ${renderTab(active)}
+        </div>
+      `;
+    }
+
+    function renderTab(key) {
+      if (key === 'processes') return renderProcesses();
+      if (key === 'devices') return renderDevices();
+      if (key === 'units') return renderUnits();
+      if (key === 'dictionaries') return renderDicts();
+      if (key === 'inspectionItems') return renderItems();
+    }
+
+    function renderProcesses() {
+      return `
+        <div class="flex-between mb-12">
+          <div class="text-2">工序数据被质检/原始记录/模板配置/SCADA点位映射等多处引用</div>
+          <button class="btn btn-primary" onclick="location.href='./processes.html'">进入工序管理</button>
+        </div>
+        <table class="table">
+          <thead><tr><th>工段</th><th>工序编号</th><th>工序名称</th><th>工序类型</th><th>创建时间</th><th class="col-actions">操作</th></tr></thead>
+          <tbody>
+            ${MOCK.processManagementList.slice(0, 10).map(s => `
+              <tr>
+                <td>${s.stage}</td>
+                <td><b>${s.code}</b></td>
+                <td>${s.name}</td>
+                <td><span class="tag tag-primary">${s.processType || '流程工序'}</span></td>
+                <td>${s.createdAt}</td>
+                <td class="col-actions">
+                  <button class="btn-text" onclick="location.href='./process-detail.html?code=${s.code}'">查看</button>
+                  <button class="btn-text" onclick="location.href='./processes.html'">编辑</button>
+                </td>
+              </tr>`).join('')}
+          </tbody>
+        </table>`;
+    }
+    function renderDevices() {
+      return `
+        <div class="flex-between mb-12">
+          <div class="text-2">设备（取样点）作为质检表单设备下拉的来源</div>
+          <button class="btn btn-primary" onclick="location.href='./devices.html'">进入设备管理</button>
+        </div>
+        <table class="table">
+          <thead><tr><th>设备编号</th><th>设备名称</th><th>关联工序</th><th>启用</th><th>创建时间</th><th class="col-actions">操作</th></tr></thead>
+          <tbody>
+            ${MOCK.deviceManagementList.map(s => `
+              <tr><td><b>${s.code}</b></td><td>${s.name}</td><td>${s.process}</td>
+              <td><div class="switch ${s.enabled ? 'on' : ''}"></div></td>
+              <td>${s.createdAt}</td>
+              <td class="col-actions">
+                <button class="btn-text" onclick="location.href='./device-detail.html?code=${s.code}'">查看</button>
+                <button class="btn-text" onclick="location.href='./devices.html'">编辑</button>
+              </td></tr>`).join('')}
+          </tbody>
+        </table>`;
+    }
+    function renderUnits() {
+      return `
+        <div class="flex-between mb-12">
+          <div class="text-2">单位字典统一维护，避免硬编码</div>
+          <button class="btn btn-primary">+ 新增单位</button>
+        </div>
+        <table class="table">
+          <thead><tr><th>单位</th><th>显示名</th><th>说明</th><th>启用</th><th class="col-actions">操作</th></tr></thead>
+          <tbody>
+            ${MOCK.units.map(s => `
+              <tr>
+                <td><a class="text-primary fw-500" href="unit-detail.html?name=${encodeURIComponent(s.name)}">${s.name}</a></td>
+                <td>${s.display}</td><td>${s.desc}</td>
+                <td><div class="switch ${s.enabled ? 'on' : ''}"></div></td>
+                <td class="col-actions">
+                  <button class="btn-text" onclick="location.href='unit-detail.html?name=${encodeURIComponent(s.name)}'">查看</button>
+                  <button class="btn-text">编辑</button>
+                </td>
+              </tr>`).join('')}
+          </tbody>
+        </table>`;
+    }
+    function renderDicts() {
+      return '<div class="text-2" style="color:#000">正在跳转到通用字典…</div>';
+    }
+    function renderItems() {
+      return `
+        <div class="flex-between mb-12">
+          <div>
+            <div class="text-2">检验项目的全局主数据（"叫什么/是什么类型"），具体规格上下限在【质检模板配置】中维护</div>
+          </div>
+          <button class="btn btn-primary" onclick="location.href='./inspection-items.html'">进入检验项目管理</button>
+        </div>
+        <table class="table">
+          <thead><tr><th>项目名称</th><th>数据类型</th><th>启用</th><th>创建时间</th><th class="col-actions">操作</th></tr></thead>
+          <tbody>
+            ${MOCK.inspectionItemManagementList.map(s => `
+              <tr><td><b>${s.name}</b></td>
+              <td><span class="tag ${s.dataType === '数值型' ? 'tag-blue' : 'tag-orange'}">${s.dataType}</span></td>
+              <td><div class="switch ${s.enabled ? 'on' : ''}"></div></td>
+              <td>${s.createdAt}</td>
+              <td class="col-actions">
+                <button class="btn-text" onclick="location.href='./inspection-item-detail.html?name=${encodeURIComponent(s.name)}'">查看</button>
+                <button class="btn-text" onclick="location.href='./inspection-items.html'">编辑</button>
+              </td></tr>`).join('')}
+          </tbody>
+        </table>
+        <div class="card mt-16" style="background:var(--info-light);border-left:4px solid var(--info);box-shadow:none">
+          <div style="font-weight:500;color:var(--info);margin-bottom:6px">💡 主数据 vs 模板配置</div>
+          <div class="text-2" style="font-size:13px;line-height:1.7">
+            <b>检验项目主数据</b>定义"项目叫什么、是什么类型"（PH是数值型）；<br/>
+            <b>质检模板配置</b>定义"项目在哪个工序用、上下限是多少、标准描述是什么"。<br/>
+            两层分离，主数据变更不影响已配置的模板。
+          </div>
+        </div>`;
+    }
+
+    function switchTab(key) {
+      const url = new URL(location.href);
+      url.searchParams.set('tab', key);
+      history.replaceState(null, '', url);
+      active = key;
+      render();
+    }
+    window.switchTab = switchTab;
+
+    render();
+  </script>
+</body>
+</html>

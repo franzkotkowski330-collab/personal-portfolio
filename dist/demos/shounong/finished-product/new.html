@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>成品检验记录 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+  <style>
+    .fp-metal-table td { vertical-align: middle; }
+    .fp-metal-table td select,
+    .fp-metal-table td input[type="number"] {
+      width: 100%;
+      min-width: 100px;
+      box-sizing: border-box;
+    }
+    .fp-metal-table td textarea {
+      width: 100%;
+      min-height: 76px;
+      min-width: 160px;
+      resize: vertical;
+      box-sizing: border-box;
+      font-family: inherit;
+    }
+    .fp-metal-table thead th { white-space: nowrap; font-size: 13px; }
+    .fp-metal-caption { padding: 0 16px 12px; font-size: 12px; color: var(--text-3); }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const editId = params.get('id');
+    const isEdit = params.get('edit') === '1' && editId;
+    const row = isEdit ? MOCK.finishedProductInspectionList.find(r => r.id === editId) : null;
+
+    const page = renderLayout({
+      activeKey: 'fp-record-list',
+      breadcrumb: [
+        { label: '业务工作' },
+        { label: '成品检验' },
+        { label: '成品检验记录' },
+        { label: isEdit ? '编辑' : '新增' }
+      ]
+    });
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, s => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[s]));
+    }
+
+    function boolSel(name, val) {
+      return `
+        <select id="${name}">
+          <option value="1" ${val ? 'selected' : ''}>✓ 正常</option>
+          <option value="0" ${!val ? 'selected' : ''}>✗ 异常</option>
+        </select>
+      `;
+    }
+
+    function render() {
+      const d = row || {
+        inspectTime: '2026-05-13T10:00',
+        shift: '白班',
+        team: '甲班',
+        batchNo: '',
+        fe15: true,
+        sus: true,
+        no11: true,
+        totalBags: '',
+        passBags: '',
+        abnormal: '',
+        correction: '',
+        inspector: localStorage.getItem('userName') || '王五'
+      };
+      const it = d.inspectTime && d.inspectTime.includes(' ')
+        ? d.inspectTime.replace(' ', 'T').slice(0, 16)
+        : (d.inspectTime || '').slice(0, 16);
+
+      page.innerHTML = `
+
+        <div class="card">
+          <div class="card-header"><div class="card-title">基本信息</div></div>
+          <div class="form-row" style="grid-template-columns:repeat(3,1fr);padding:16px">
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 检验时间</label>
+              <input id="inspectTime" type="datetime-local" value="${escapeHtml(it)}" />
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 班次</label>
+              <select id="shift">
+                <option ${d.shift === '白班' ? 'selected' : ''}>白班</option>
+                <option ${d.shift === '夜班' ? 'selected' : ''}>夜班</option>
+              </select>
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 班组</label>
+              <select id="team">
+                <option ${d.team === '甲班' ? 'selected' : ''}>甲班</option>
+                <option ${d.team === '乙班' ? 'selected' : ''}>乙班</option>
+                <option ${d.team === '丙班' ? 'selected' : ''}>丙班</option>
+              </select>
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 批次号</label>
+              <input id="batchNo" type="text" value="${escapeHtml(d.batchNo)}" placeholder="批次号" />
+            </div>
+            <div class="form-item">
+              <label class="form-label">检验人</label>
+              <input id="inspector" type="text" value="${escapeHtml(d.inspector)}" />
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><div class="card-title">检验明细（金探）</div></div>
+          <div class="fp-metal-caption">在下方表格中录入本班金探检验结果；打勾=正常、打叉=异常。与详情页、编辑页使用同一表格结构展示。</div>
+          <div class="table-wrap" style="padding:0 16px 16px">
+            <table class="table fp-metal-table">
+              <thead>
+                <tr>
+                  <th>铁（Fe）1.5mm <span class="required">*</span></th>
+                  <th>不锈钢（Sus） <span class="required">*</span></th>
+                  <th>NO11-Fe2.0mm <span class="required">*</span></th>
+                  <th>产品检验数量/袋 <span class="required">*</span></th>
+                  <th>产品通过数量/袋 <span class="required">*</span></th>
+                  <th>异常描述</th>
+                  <th>纠偏</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>${boolSel('fe15', !!d.fe15)}</td>
+                  <td>${boolSel('sus', !!d.sus)}</td>
+                  <td>${boolSel('no11', !!d.no11)}</td>
+                  <td><input id="totalBags" type="number" min="0" step="1" value="${escapeHtml(String(d.totalBags ?? ''))}" placeholder="0" /></td>
+                  <td><input id="passBags" type="number" min="0" step="1" value="${escapeHtml(String(d.passBags ?? ''))}" placeholder="0" /></td>
+                  <td style="vertical-align:top"><textarea id="abnormal" rows="3" placeholder="可选">${escapeHtml(d.abnormal || '')}</textarea></td>
+                  <td style="vertical-align:top"><textarea id="correction" rows="3" placeholder="可选">${escapeHtml(d.correction || '')}</textarea></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card" style="background:var(--info-light);border-left:4px solid var(--info);box-shadow:none">
+          <div style="font-weight:500;color:var(--info);margin-bottom:6px">说明</div>
+          <div class="text-2" style="font-size:13px;line-height:1.7">
+            未汇总进成品日检验报告前状态为<strong>草稿</strong>；汇总后进入<strong>待审核</strong>流程。关联报告编号在【成品日检验报告】生成后回写。
+          </div>
+        </div>
+      `;
+    }
+
+    window.saveForm = function () {
+      const batchNo = document.getElementById('batchNo').value.trim();
+      const total = document.getElementById('totalBags').value;
+      const pass = document.getElementById('passBags').value;
+      if (!batchNo || total === '' || pass === '') {
+        toast('请填写必填项：批次号、数量/袋、通过数量/袋', 'error');
+        return;
+      }
+      const fe = document.getElementById('fe15').value === '1';
+      const sus = document.getElementById('sus').value === '1';
+      const no11 = document.getElementById('no11').value === '1';
+      const ok = fe && sus && no11;
+      toast(ok ? '已保存（检验结果：正常）' : '已保存（检验结果：异常）', 'success');
+      setTimeout(() => location.href = './list.html', 400);
+    };
+
+    if (editId && !row) {
+      page.innerHTML = ``;
+    } else {
+      render();
+    }
+  </script>
+</body>
+</html>

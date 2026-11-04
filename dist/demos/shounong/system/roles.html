@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <title>角色管理 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script>
+    const page = renderLayout({
+      activeKey: 'sys-roles',
+      breadcrumb: [{ label: '系统管理' }, { label: '角色管理' }]
+    });
+
+    const modules = [
+      { name: '工序检验', actions: ['新建', '查看', '编辑', '删除', '审核'] },
+      { name: '原始记录表', actions: ['新建', '查看', '编辑', '删除', '审核'] },
+      { name: '发酵记录', actions: ['新建', '查看', '编辑', '删除', '审核'] },
+      { name: '班报表', actions: ['新建', '查看', '编辑', '删除', '审核'] },
+      { name: '基础数据管理', actions: ['查看', '新增', '编辑', '停用'] },
+      { name: '操作记录', actions: ['查看摘要', '查看字段明细'] },
+      { name: '系统管理', actions: ['用户', '角色', '组织', '系统配置'] }
+    ];
+
+    page.innerHTML = `
+      <div class="query-card">
+        <div class="query-fields">
+          <span class="query-field q-w-lg">
+            <label>角色名称</label>
+            <input type="text" placeholder="请输入" />
+          </span>
+          <span class="query-field q-w-sm">
+            <label>角色类型</label>
+            <select><option>全部类型</option><option>内置</option><option>自定义</option></select>
+          </span>
+        </div>
+        <div class="query-actions">
+          <button class="btn">重置</button>
+          <button class="btn btn-primary">查询</button>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="table-card">
+          <div class="table-toolbar">
+            <span class="text-3">共 ${MOCK.roles.length} 条</span>
+            <div class="flex gap-8">
+              <button class="btn" onclick="toast('配置列表字段', 'info')">配置列表字段</button>
+              <button class="btn btn-primary">新增</button>
+            </div>
+          </div>
+          <table class="table">
+            <thead><tr><th>角色名称</th><th>用户数</th><th>类型</th><th class="col-actions">操作</th></tr></thead>
+            <tbody>
+              ${MOCK.roles.map((r, i) => `
+                <tr ${i === 0 ? 'style="background:var(--primary-light)"' : ''}>
+                  <td><b>${r.name}</b><div class="text-3" style="font-size:12px">${r.desc}</div></td>
+                  <td>${r.userCount} 人</td>
+                  <td>${r.builtin ? '<span class="tag tag-blue">内置</span>' : '<span class="tag tag-grey">自定义</span>'}</td>
+                  <td class="col-actions"><button class="btn-text">权限</button>${!r.builtin ? '<button class="btn-text danger">删除</button>' : ''}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          <div class="pagination-v2">
+            <span class="pagination-total">共 ${MOCK.roles.length} 条</span>
+            <select class="pagination-size"><option>100条/页</option><option>200条/页</option><option>300条/页</option><option>400条/页</option></select>
+            <button disabled>«</button><button disabled>‹</button><button class="active">1</button><button>›</button><button>»</button>
+            <span class="pagination-jumper">跳至 <input type="number" min="1" value="1" /> 页</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><div class="card-title">系统管理员 · 权限配置</div></div>
+          <div class="text-3" style="font-size:12px;margin-bottom:12px">勾选该角色可访问的模块和操作类型</div>
+          ${modules.map(m => `
+            <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+              <div style="font-weight:500;margin-bottom:8px;color:var(--text-1)">${m.name}</div>
+              <div class="flex" style="gap:12px;flex-wrap:wrap;font-size:13px">
+                ${m.actions.map(a => `<label style="display:flex;align-items:center;gap:4px"><input type="checkbox" checked /> ${a}</label>`).join('')}
+              </div>
+            </div>`).join('')}
+          <div class="flex gap-8 mt-12"><button class="btn">取消</button><button class="btn btn-primary">保存权限</button></div>
+        </div>
+      </div>
+    `;
+  </script>
+</body>
+</html>

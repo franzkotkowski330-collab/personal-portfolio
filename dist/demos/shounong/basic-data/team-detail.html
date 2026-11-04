@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>班组详情 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script src="../assets/js/basic-detail.js"></script>
+  <script>
+    renderBasicDetailPage({
+      activeKey: 'basic-teams',
+      listHref: './teams.html',
+      listLabel: '班组管理',
+      paramKey: 'code',
+      defaultId: 'A',
+      findRow: (code) => (MOCK.teams || []).find(r => r.code === code),
+      title: '班组详情',
+      usage: '班组数据作为所有业务表单中「班组」下拉选项的来源。',
+      fields: [
+        { key: 'name', label: '班组名称' },
+        { key: 'code', label: '编码' },
+        { key: 'desc', label: '说明' },
+        { key: 'sort', label: '排序' },
+        { key: 'enabled', label: '状态', format: v => v ? '启用' : '停用' }
+      ]
+    });
+  </script>
+</body>
+</html>

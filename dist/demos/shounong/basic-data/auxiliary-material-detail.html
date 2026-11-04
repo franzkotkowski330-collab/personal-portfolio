@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>辅料详情 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+  <style>
+    .modal {
+      width: 620px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script>
+    const AUX_STORAGE_KEY = 'basicData.auxiliaryMaterials.v1';
+    const AUX_LOG_STORAGE_KEY = 'basicData.auxiliaryMaterialLogs.v1';
+    const params = new URLSearchParams(location.search);
+    const code = params.get('code') || '1';
+
+    let auxList = loadAuxList();
+    let auxLogs = loadAuxLogs();
+
+    const page = renderLayout({
+      activeKey: 'basic-auxiliary-materials',
+      breadcrumb: [{ label: '基础数据管理' }, { label: '辅料管理' }, { label: code }]
+    });
+
+    function loadAuxList() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(AUX_STORAGE_KEY) || 'null');
+        if (Array.isArray(saved)) return saved;
+      } catch (e) {}
+      return (MOCK.auxiliaryMaterialList || []).map(row => ({ ...row }));
+    }
+
+    function saveAuxList() {
+      localStorage.setItem(AUX_STORAGE_KEY, JSON.stringify(auxList));
+    }
+
+    function loadAuxLogs() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(AUX_LOG_STORAGE_KEY) || '{}');
+        return { ...(MOCK.auxiliaryMaterialLogs || {}), ...(saved || {}) };
+      } catch (e) {
+        return { ...(MOCK.auxiliaryMaterialLogs || {}) };
+      }
+    }
+
+    function saveAuxLogs() {
+      localStorage.setItem(AUX_LOG_STORAGE_KEY, JSON.stringify(auxLogs));
+    }
+
+    function currentUser() {
+      return localStorage.getItem('userName') || '王尚革';
+    }
+
+    function nowText() {
+      const d = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, s => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[s]));
+    }
+
+    function getRow() {
+      return auxList.find(row => row.code === code);
+    }
+
+    function appendLog(rowCode, log) {
+      auxLogs[rowCode] = auxLogs[rowCode] || [];
+      auxLogs[rowCode].unshift(log);
+      saveAuxLogs();
+    }
+
+    function collectDiff(oldRow, nextRow) {
+      const fields = [
+        { key: 'name', label: '辅料名称' },
+        { key: 'manufacturer', label: '生产厂家' },
+        { key: 'process', label: '使用工序' },
+        { key: 'enabled', label: '状态', format: v => v ? '启用' : '停用' }
+      ];
+      return fields
+        .filter(f => oldRow[f.key] !== nextRow[f.key])
+        .map(f => ({
+          field: f.label,
+          old: f.format ? f.format(oldRow[f.key]) : oldRow[f.key],
+          new: f.format ? f.format(nextRow[f.key]) : nextRow[f.key]
+        }));
+    }
+
+    function getLogs(row) {
+      const logs = auxLogs[code] || [];
+      if (logs.length) return logs;
+      if (!row) return [];
+      return [{
+        time: row.createdAt || '—',
+        user: row.creator || '—',
+        action: '创建',
+        type: 'create'
+      }];
+    }
+
+    function logClass(op) {
+      if (op.type === 'create' || op.action.includes('创建')) return 'create';
+      if (op.type === 'delete' || op.action.includes('删除')) return 'reject';
+      if (op.type === 'edit' || op.action.includes('编辑')) return '';
+      return '';
+    }
+
+    function renderOperationLog(row) {
+      const logs = getLogs(row);
+      if (!logs.length) return '<div class="empty" style="padding:32px">暂无操作记录</div>';
+      return `
+        <ul class="oplog-list">
+          ${logs.map((op, idx) => {
+            const hasDiff = op.diff && op.diff.length;
+            return `
+              <li class="oplog-item ${logClass(op)}">
+                <div class="oplog-head">
+                  <span class="time">${escapeHtml(op.time)}</span>
+                  <span class="user">${escapeHtml(op.user)}</span>
+                  <span class="action">· ${escapeHtml(op.action)}</span>
+                  ${hasDiff ? `<span class="summary">变更了 ${op.diff.length} 个字段</span>` : ''}
+                  ${hasDiff ? `<span class="toggle" onclick="toggleDiff(${idx})">展开 ▾</span>` : ''}
+                </div>
+                ${hasDiff ? `
+                  <div class="oplog-detail" id="diff-${idx}">
+                    ${op.diff.map(d => `
+                      <div class="oplog-diff-row">
+                        <span class="field">${escapeHtml(d.field)}</span>
+                        <span class="old">${escapeHtml(d.old)}</span>
+                        <span class="arrow">→</span>
+                        <span class="new">${escapeHtml(d.new)}</span>
+                      </div>
+                    `).join('')}
+                  </div>
+                ` : ''}
+              </li>
+            `;
+          }).join('')}
+        </ul>
+      `;
+    }
+
+    function render() {
+      const row = getRow();
+      if (!row) {
+        page.innerHTML = `
+          <div class="card">
+            <div class="card-header"><div class="card-title">操作记录</div></div>
+            ${renderOperationLog(row)}
+          </div>
+        `;
+        return;
+      }
+
+      page.innerHTML = `
+        <div class="detail-page-stack"><div class="card">
+              <div class="card-header"><div class="card-title">基础信息</div></div>
+              <div class="detail-meta">
+                <div class="detail-meta-item"><div class="lbl">辅料编码</div><div class="val">${escapeHtml(row.code)}</div></div>
+                <div class="detail-meta-item"><div class="lbl">辅料名称</div><div class="val">${escapeHtml(row.name)}</div></div>
+                <div class="detail-meta-item"><div class="lbl">生产厂家</div><div class="val">${escapeHtml(row.manufacturer)}</div></div>
+                <div class="detail-meta-item"><div class="lbl">使用工序</div><div class="val">${escapeHtml(row.process)}</div></div>
+                <div class="detail-meta-item"><div class="lbl">状态</div><div class="val">${row.enabled ? '启用' : '停用'}</div></div>
+                <div class="detail-meta-item"><div class="lbl">创建人</div><div class="val">${escapeHtml(row.creator || '—')}</div></div>
+                <div class="detail-meta-item"><div class="lbl">创建时间</div><div class="val">${escapeHtml(row.createdAt || '—')}</div></div>
+                <div class="detail-meta-item"><div class="lbl">最近编辑人</div><div class="val">${escapeHtml(row.updatedBy || row.creator || '—')}</div></div>
+                <div class="detail-meta-item"><div class="lbl">最近编辑时间</div><div class="val">${escapeHtml(row.updatedAt || row.createdAt || '—')}</div></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">操作记录 <span class="text-3" style="font-weight:400;font-size:12px">（创建、编辑记录按时间倒序）</span></div>
+              </div>
+              ${renderOperationLog(row)}
+            </div>
+
+            <div class="card" style="background:var(--info-light);box-shadow:none">
+              <div style="font-weight:600;color:var(--info);margin-bottom:8px">数据用途</div>
+              <div class="text-2" style="font-size:13px;line-height:1.8">
+                辅料基础数据用于生产记录、班报表等业务表单中的辅料选择与厂家追溯。<br/>
+                查看页保留创建与编辑记录，便于追踪基础数据变更。
+              </div>
+            </div>
+        </div>
+      `;
+    }
+
+    window.toggleDiff = function (idx) {
+      const el = document.getElementById('diff-' + idx);
+      if (el) el.classList.toggle('open');
+    };
+
+    window.openAuxEditor = function () {
+      const row = getRow();
+      if (!row) {
+        toast('未找到辅料数据', 'error');
+        return;
+      }
+      const processOptions = [...new Set([...(MOCK.processManagementList || []).map(p => p.name), ...auxList.map(item => item.process)])];
+      confirmDialog(
+        '编辑辅料',
+        `
+          <div class="form-row" style="grid-template-columns:1fr 1fr">
+            <div class="form-item">
+              <label class="form-label">辅料编码</label>
+              <input id="form-code" type="text" readonly value="${escapeHtml(row.code)}" />
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 辅料名称</label>
+              <input id="form-name" type="text" value="${escapeHtml(row.name)}" />
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 生产厂家</label>
+              <input id="form-manufacturer" type="text" value="${escapeHtml(row.manufacturer)}" />
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 使用工序</label>
+              <input id="form-process" type="text" list="process-options" value="${escapeHtml(row.process)}" />
+              <datalist id="process-options">
+                ${processOptions.map(process => `<option value="${escapeHtml(process)}"></option>`).join('')}
+              </datalist>
+            </div>
+            <div class="form-item">
+              <label class="form-label">状态</label>
+              <select id="form-enabled">
+                <option value="true" ${row.enabled ? 'selected' : ''}>启用</option>
+                <option value="false" ${!row.enabled ? 'selected' : ''}>停用</option>
+              </select>
+            </div>
+          </div>
+        `,
+        () => {
+          const next = {
+            ...row,
+            name: document.getElementById('form-name').value.trim(),
+            manufacturer: document.getElementById('form-manufacturer').value.trim(),
+            process: document.getElementById('form-process').value.trim(),
+            enabled: document.getElementById('form-enabled').value === 'true'
+          };
+          if (!next.name || !next.manufacturer || !next.process) {
+            toast('请填写辅料名称、生产厂家和使用工序', 'error');
+            return false;
+          }
+          const diff = collectDiff(row, next);
+          const idx = auxList.findIndex(item => item.code === code);
+          if (diff.length) {
+            const time = nowText();
+            const user = currentUser();
+            auxList[idx] = { ...next, updatedBy: user, updatedAt: time };
+            saveAuxList();
+            appendLog(code, { time, user, action: '编辑保存', type: 'edit', diff });
+          }
+          toast(diff.length ? '已保存辅料修改' : '未发现字段变更', diff.length ? 'success' : 'warning');
+          render();
+        },
+        '保存'
+      );
+    };
+
+    window.confirmDelete = function () {
+      const row = getRow();
+      if (!row) {
+        toast('未找到辅料数据', 'error');
+        return;
+      }
+      confirmDialog('删除辅料', `确定删除辅料 <b>${escapeHtml(row.code)} - ${escapeHtml(row.name)}</b>？`, () => {
+        auxList = auxList.filter(item => item.code !== code);
+        saveAuxList();
+        appendLog(code, {
+          time: nowText(),
+          user: currentUser(),
+          action: '删除',
+          type: 'delete',
+          diff: [{ field: '辅料', old: `${row.code} - ${row.name}`, new: '已删除' }]
+        });
+        toast('已删除辅料', 'success');
+        setTimeout(() => location.href = './auxiliary-materials.html', 600);
+      }, '删除');
+    };
+
+    render();
+  </script>
+</body>
+</html>

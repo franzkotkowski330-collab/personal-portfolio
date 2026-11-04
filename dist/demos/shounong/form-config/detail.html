@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>检验表单配置详情 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+  <style>
+    .modal {
+      width: 760px;
+    }
+    .standard-box {
+      grid-column: 1 / -1;
+      background: var(--bg-soft);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script>
+    const DEPT_STORAGE_KEY = 'inspectionForm.departments.v1';
+    const CONFIG_STORAGE_KEY = 'inspectionForm.configs.v1';
+    const DIVISION_STORAGE_KEY = 'inspectionForm.imDivision.v1';
+    const PROCESS_STORAGE_KEY = 'basicData.processes.v1';
+    const ITEM_STORAGE_KEY = 'basicData.inspectionItems.v1';
+    const params = new URLSearchParams(location.search);
+    const deptCode = params.get('dept') || 'QC';
+
+    let departments = loadDepartments();
+    let configs = loadConfigs();
+    const processes = loadProcesses();
+    const inspectionItems = loadInspectionItems();
+    const dept = departments.find(row => row.code === deptCode) || departments[0];
+    let subTab = deptCode === 'IM' && params.get('tab') === 'division' ? 'division' : 'config';
+    let divisionRows = loadDivisionRows();
+
+    const page = renderLayout({
+      activeKey: 'inspection-form-config',
+      breadcrumb: [{ label: '数据&配置' }, { label: '检验表单配置' }, { label: dept ? dept.name : deptCode }]
+    });
+
+    function loadDepartments() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(DEPT_STORAGE_KEY) || 'null');
+        if (Array.isArray(saved)) return saved;
+      } catch (e) {}
+      return (MOCK.inspectionFormDepartments || []).map(row => ({ ...row }));
+    }
+
+    function saveDepartments() {
+      localStorage.setItem(DEPT_STORAGE_KEY, JSON.stringify(departments));
+    }
+
+    function loadConfigs() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(CONFIG_STORAGE_KEY) || 'null');
+        if (saved && typeof saved === 'object') return saved;
+      } catch (e) {}
+      return JSON.parse(JSON.stringify(MOCK.inspectionFormConfigs || {}));
+    }
+
+    function saveConfigs() {
+      localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(configs));
+    }
+
+    function loadDivisionRows() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(DIVISION_STORAGE_KEY) || 'null');
+        if (Array.isArray(saved)) return saved.map(row => ({ ...row }));
+      } catch (e) {}
+      return JSON.parse(JSON.stringify(MOCK.inspectionFormImDivision || []));
+    }
+
+    function saveDivisionRows() {
+      localStorage.setItem(DIVISION_STORAGE_KEY, JSON.stringify(divisionRows));
+    }
+
+    function syncDivisionRowsFromDom() {
+      const wrap = document.getElementById('division-table-wrap');
+      if (!wrap || deptCode !== 'IM') return;
+      const tbody = wrap.querySelector('tbody');
+      if (!tbody) return;
+      divisionRows = [...tbody.querySelectorAll('tr[data-div-id]')].map(tr => ({
+        id: tr.getAttribute('data-div-id'),
+        process: tr.querySelector('.js-div-process')?.value || '',
+        division: tr.querySelector('.js-div-role')?.value || '中间体 1'
+      }));
+      saveDivisionRows();
+    }
+
+    function loadProcesses() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(PROCESS_STORAGE_KEY) || 'null');
+        if (Array.isArray(saved)) return saved;
+      } catch (e) {}
+      return (MOCK.processManagementList || []).map(row => ({ ...row }));
+    }
+
+    function loadInspectionItems() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(ITEM_STORAGE_KEY) || 'null');
+        if (Array.isArray(saved)) return saved;
+      } catch (e) {}
+      return (MOCK.inspectionItemManagementList || []).map(row => ({ ...row }));
+    }
+
+    function currentUser() {
+      return localStorage.getItem('userName') || '王尚革';
+    }
+
+    function nowText() {
+      const d = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, s => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[s]));
+    }
+
+    function dataTypeTag(dataType) {
+      const cls = dataType === '数值型' ? 'tag-blue' : dataType === '文本型' ? 'tag-orange' : 'tag-green';
+      return `<span class="tag ${cls}">${escapeHtml(dataType)}</span>`;
+    }
+
+    function configList() {
+      configs[deptCode] = configs[deptCode] || [];
+      return configs[deptCode];
+    }
+
+    function updateDepartmentMeta() {
+      const target = departments.find(row => row.code === deptCode);
+      if (target) {
+        target.configCount = configList().length;
+        target.updatedBy = currentUser();
+        target.updatedAt = nowText();
+        saveDepartments();
+      }
+    }
+
+    function standardSummary(row) {
+      if (row.dataType === '数值型') {
+        const min = row.specMin && row.specMin !== '—' ? `≥ ${row.specMin}` : '';
+        const max = row.specMax && row.specMax !== '—' ? `≤ ${row.specMax}` : '';
+        const range = [min, max].filter(Boolean).join('，') || '未配置上下限';
+        return `${range}${row.unit && row.unit !== '—' ? ' ' + row.unit : ''}`;
+      }
+      if (row.dataType === '文本型') return row.textStandard || row.standard || '文本描述判定';
+      if (row.dataType === '布尔型') return `合格值：${row.passValue || '否'}`;
+      return row.standard || '—';
+    }
+
+    function render() {
+      if (!dept) {
+        page.innerHTML = ``;
+        return;
+      }
+
+      const list = configList();
+      const isIm = deptCode === 'IM';
+      const headerActions = isIm && subTab === 'division'
+        ? `<div class="flex gap-8">
+            <button class="btn" onclick="location.href='./list.html'">‹ 返回列表</button>
+            <button class="btn" onclick="addDivisionRow()">+ 新增一行</button>
+            <button class="btn btn-primary" onclick="saveDivisionTable()">保存检验工序分组</button>
+          </div>`
+        : `<div class="flex gap-8">
+            <button class="btn" onclick="location.href='./list.html'">‹ 返回列表</button>
+            <button class="btn btn-primary" onclick="openConfigEditor()">+ 新增配置</button>
+          </div>`;
+
+      const tabBar = isIm ? `
+        <div class="tabs">
+          <div class="tab ${subTab === 'config' ? 'active' : ''}" onclick="setImTab('config')">配置明细</div>
+          <div class="tab ${subTab === 'division' ? 'active' : ''}" onclick="setImTab('division')">检验工序分组</div>
+        </div>` : '';
+
+      const configSection = (!isIm || subTab === 'config') ? `
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">配置明细 <span class="text-3" style="font-weight:400;font-size:12px">（共 ${list.length} 项）</span></div>
+          </div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>工序</th>
+                  <th>检验项目</th>
+                  <th>数据类型</th>
+                  <th>检验标准</th>
+                  <th>标准描述</th>
+                  <th>必填</th>
+                  <th>启用</th>
+                  <th class="col-actions">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${list.length ? list.map(row => `
+                  <tr>
+                    <td><b>${escapeHtml(row.process)}</b></td>
+                    <td>${escapeHtml(row.item)}</td>
+                    <td>${dataTypeTag(row.dataType)}</td>
+                    <td class="text-2">${escapeHtml(standardSummary(row))}</td>
+                    <td class="text-2" style="max-width:180px">${escapeHtml(row.standard || '—')}</td>
+                    <td>${row.required ? '<span class="tag tag-red">必填</span>' : '<span class="text-3">否</span>'}</td>
+                    <td><div class="switch ${row.enabled ? 'on' : ''}"></div></td>
+                    <td class="col-actions">
+                      <button class="btn-text" onclick="openConfigEditor('${escapeHtml(row.id)}')">编辑</button>
+                      <button class="btn-text danger" onclick="confirmDelete('${escapeHtml(row.id)}')">删除</button>
+                    </td>
+                  </tr>
+                `).join('') : `
+                  <tr><td colspan="8"><div class="empty" style="padding:32px">暂无配置，请点击"新增配置"</div></td></tr>
+                `}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card" style="background:var(--info-light);border-left:4px solid var(--info);box-shadow:none">
+          <div style="font-weight:500;color:var(--info);margin-bottom:6px">配置规则</div>
+          <div class="text-2" style="font-size:13px;line-height:1.7">
+            数值型项目配置单位、规格下限、规格上限；文本型项目配置文本判定标准；布尔型项目配置合格值。保存后的配置将作为对应部门检验表单的渲染来源。
+          </div>
+        </div>` : '';
+
+      const divisionSection = isIm && subTab === 'division' ? `
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">检验工序分组 <span class="text-3" style="font-weight:400;font-size:12px">（共 ${divisionRows.length} 行）</span></div>
+          </div>
+          <div class="table-wrap" id="division-table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th style="min-width:220px">工序</th>
+                  <th style="min-width:140px">分组</th>
+                  <th class="col-actions">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${divisionRows.length ? divisionRows.map(row => `
+                  <tr data-div-id="${escapeHtml(row.id)}">
+                    <td>
+                      <select class="js-div-process">${processOptions(row.process)}</select>
+                      <div class="form-help" style="margin-top:4px">下拉数据来自【工序管理】</div>
+                    </td>
+                    <td>
+                      <select class="js-div-role">${divisionLabOptions(row.division || '中间体 1')}</select>
+                    </td>
+                    <td class="col-actions">
+                      <button class="btn-text danger" onclick="removeDivisionRow(${JSON.stringify(row.id)})">删除</button>
+                    </td>
+                  </tr>
+                `).join('') : `
+                  <tr><td colspan="3"><div class="empty" style="padding:32px">暂无检验工序分组数据，请点击「新增一行」</div></td></tr>
+                `}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card" style="background:var(--info-light);border-left:4px solid var(--info);box-shadow:none">
+          <div style="font-weight:500;color:var(--info);margin-bottom:6px">业务说明</div>
+          <div class="text-2" style="font-size:13px;line-height:1.7">
+            中间体检验部门配置两名检验人员，分别对应分组选项「中间体 1」「中间体 2」；按工序维护检验工序分组后，系统按工序将检验负责范围划分给对应检验人员（与【工序管理】主数据联动）。
+          </div>
+        </div>` : '';
+
+      page.innerHTML = `
+        ${headerActions}
+        ${tabBar}
+        ${configSection}
+        ${divisionSection}
+      `;
+    }
+
+    function processOptions(selected) {
+      return processes
+        .filter(row => row.enabled !== false)
+        .map(row => `<option value="${escapeHtml(row.name)}" ${selected === row.name ? 'selected' : ''}>${escapeHtml(row.name)}（${escapeHtml(row.stage)}）</option>`)
+        .join('');
+    }
+
+    function divisionLabOptions(selected) {
+      const labs = ['中间体 1', '中间体 2'];
+      return labs.map(lab => `<option value="${escapeHtml(lab)}" ${selected === lab ? 'selected' : ''}>${escapeHtml(lab)}</option>`).join('');
+    }
+
+    function itemOptions(selected) {
+      return inspectionItems
+        .filter(row => row.enabled !== false)
+        .map(row => `<option value="${escapeHtml(row.name)}" ${selected === row.name ? 'selected' : ''}>${escapeHtml(row.name)}（${escapeHtml(row.dataType)}）</option>`)
+        .join('');
+    }
+
+    function selectedItemMeta() {
+      const itemName = document.getElementById('form-item')?.value;
+      return inspectionItems.find(row => row.name === itemName) || inspectionItems[0] || { name: '', dataType: '数值型' };
+    }
+
+    window.renderStandardFields = function (preset) {
+      const box = document.getElementById('standard-fields');
+      if (!box) return;
+      const meta = selectedItemMeta();
+      const row = preset || {};
+      if (meta.dataType === '数值型') {
+        box.innerHTML = `
+          <div class="form-row" style="grid-template-columns:repeat(3, 1fr)">
+            <div class="form-item">
+              <label class="form-label">单位</label>
+              <input id="form-unit" type="text" value="${escapeHtml(row.unit || '')}" placeholder="如 % / 度 / —" />
+            </div>
+            <div class="form-item">
+              <label class="form-label">规格下限</label>
+              <input id="form-min" type="text" value="${escapeHtml(row.specMin || '')}" placeholder="无下限填 —" />
+            </div>
+            <div class="form-item">
+              <label class="form-label">规格上限</label>
+              <input id="form-max" type="text" value="${escapeHtml(row.specMax || '')}" placeholder="无上限填 —" />
+            </div>
+          </div>
+        `;
+      } else if (meta.dataType === '文本型') {
+        box.innerHTML = `
+          <div class="form-item">
+            <label class="form-label"><span class="required">*</span> 文本判定标准</label>
+            <input id="form-text-standard" type="text" value="${escapeHtml(row.textStandard || '')}" placeholder="如 正常、无明显异味" />
+          </div>
+        `;
+      } else {
+        box.innerHTML = `
+          <div class="form-item">
+            <label class="form-label"><span class="required">*</span> 合格值</label>
+            <select id="form-pass-value">
+              <option value="是" ${row.passValue === '是' ? 'selected' : ''}>是</option>
+              <option value="否" ${row.passValue !== '是' ? 'selected' : ''}>否</option>
+            </select>
+          </div>
+        `;
+      }
+    };
+
+    window.openConfigEditor = function (id) {
+      const editing = !!id;
+      const row = editing
+        ? configList().find(item => item.id === id)
+        : { process: processes[0]?.name || '', item: inspectionItems[0]?.name || '', required: true, enabled: true, unit: '—', specMin: '—', specMax: '—' };
+      if (!row) {
+        toast('未找到配置项', 'error');
+        return;
+      }
+
+      confirmDialog(
+        editing ? '编辑检验项目配置' : '新增检验项目配置',
+        `
+          <div class="form-row" style="grid-template-columns:1fr 1fr">
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 工序</label>
+              <select id="form-process">${processOptions(row.process)}</select>
+              <div class="form-help">来源：基础数据管理 / 工序管理</div>
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 检验项目</label>
+              <select id="form-item" onchange="renderStandardFields()">${itemOptions(row.item)}</select>
+              <div class="form-help">来源：基础数据管理 / 检验项目管理</div>
+            </div>
+            <div class="form-item">
+              <label class="form-label">是否必填</label>
+              <select id="form-required">
+                <option value="true" ${row.required ? 'selected' : ''}>必填</option>
+                <option value="false" ${!row.required ? 'selected' : ''}>非必填</option>
+              </select>
+            </div>
+            <div class="form-item">
+              <label class="form-label">状态</label>
+              <select id="form-enabled">
+                <option value="true" ${row.enabled ? 'selected' : ''}>启用</option>
+                <option value="false" ${!row.enabled ? 'selected' : ''}>停用</option>
+              </select>
+            </div>
+            <div class="standard-box">
+              <div class="fw-600 mb-12">检验标准配置</div>
+              <div id="standard-fields"></div>
+            </div>
+            <div class="form-item" style="grid-column:1 / -1">
+              <label class="form-label">标准描述</label>
+              <textarea id="form-standard" placeholder="请输入标准说明、判定口径或注意事项">${escapeHtml(row.standard || '')}</textarea>
+            </div>
+          </div>
+        `,
+        () => {
+          const itemName = document.getElementById('form-item').value;
+          const meta = inspectionItems.find(item => item.name === itemName);
+          if (!meta) {
+            toast('请选择有效的检验项目', 'error');
+            return false;
+          }
+
+          const next = {
+            id: editing ? row.id : `${deptCode}-${Date.now()}`,
+            process: document.getElementById('form-process').value,
+            item: itemName,
+            dataType: meta.dataType,
+            required: document.getElementById('form-required').value === 'true',
+            enabled: document.getElementById('form-enabled').value === 'true',
+            standard: document.getElementById('form-standard').value.trim()
+          };
+
+          if (!next.process || !next.item) {
+            toast('请选择工序和检验项目', 'error');
+            return false;
+          }
+
+          if (meta.dataType === '数值型') {
+            next.unit = document.getElementById('form-unit').value.trim() || '—';
+            next.specMin = document.getElementById('form-min').value.trim() || '—';
+            next.specMax = document.getElementById('form-max').value.trim() || '—';
+          } else if (meta.dataType === '文本型') {
+            next.textStandard = document.getElementById('form-text-standard').value.trim();
+            if (!next.textStandard) {
+              toast('请填写文本判定标准', 'error');
+              return false;
+            }
+          } else {
+            next.passValue = document.getElementById('form-pass-value').value;
+          }
+
+          const list = configList();
+          if (editing) {
+            const idx = list.findIndex(item => item.id === id);
+            list[idx] = next;
+            toast('已保存检验表单配置', 'success');
+          } else {
+            list.unshift(next);
+            toast('已新增检验表单配置', 'success');
+          }
+          saveConfigs();
+          updateDepartmentMeta();
+          render();
+        },
+        editing ? '保存' : '新增'
+      );
+
+      setTimeout(() => {
+        renderStandardFields(row);
+      }, 0);
+    };
+
+    window.confirmDelete = function (id) {
+      const row = configList().find(item => item.id === id);
+      if (!row) {
+        toast('未找到配置项', 'error');
+        return;
+      }
+      confirmDialog('删除配置', `确定删除 <b>${escapeHtml(row.process)} / ${escapeHtml(row.item)}</b> 的配置？`, () => {
+        configs[deptCode] = configList().filter(item => item.id !== id);
+        saveConfigs();
+        updateDepartmentMeta();
+        toast('已删除检验表单配置', 'success');
+        render();
+      }, '删除');
+    };
+
+    window.setImTab = function (t) {
+      if (deptCode !== 'IM') return;
+      if (subTab === 'division' && t === 'config') syncDivisionRowsFromDom();
+      subTab = t;
+      const u = new URL(location.href);
+      if (t === 'division') u.searchParams.set('tab', 'division');
+      else u.searchParams.delete('tab');
+      history.replaceState(null, '', u.toString());
+      render();
+    };
+
+    window.addDivisionRow = function () {
+      syncDivisionRowsFromDom();
+      const first = processes.find(row => row.enabled !== false);
+      divisionRows.push({
+        id: 'IM-D-' + Date.now(),
+        process: first?.name || '',
+        division: '中间体 1'
+      });
+      saveDivisionRows();
+      updateDepartmentMeta();
+      render();
+    };
+
+    window.removeDivisionRow = function (id) {
+      syncDivisionRowsFromDom();
+      divisionRows = divisionRows.filter(row => row.id !== id);
+      saveDivisionRows();
+      updateDepartmentMeta();
+      toast('已删除检验工序分组行', 'success');
+      render();
+    };
+
+    window.saveDivisionTable = function () {
+      syncDivisionRowsFromDom();
+      updateDepartmentMeta();
+      toast('已保存检验工序分组', 'success');
+      render();
+    };
+
+    render();
+  </script>
+</body>
+</html>

@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>来料检验详情 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+  <style>
+    .inspection-entry-table .standard {
+      color: var(--text-2);
+      line-height: 1.5;
+    }
+    .inspection-entry-table .source-note {
+      color: var(--text-3);
+      font-size: 12px;
+      margin-top: 4px;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const id = params.get('id') || 'IQC-20260512-0008';
+    const data = MOCK.incomingInspectionList.find(x => x.id === id) || MOCK.incomingInspectionList[0];
+    const role = localStorage.getItem('role') || '系统管理员';
+    const canShowDiff = ['班组长', '生产管理人员', '系统管理员'].includes(role);
+
+    const page = renderLayout({
+      activeKey: 'incoming-inspection',
+      breadcrumb: [
+        { label: '业务工作' },
+        { label: '来料检验', href: './list.html' },
+        { label: data.id }
+      ]
+    });
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, s => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[s]));
+    }
+
+    function resultTag(result) {
+      return result === '合格'
+        ? '<span class="tag tag-green">合格</span>'
+        : '<span class="tag tag-red">不合格</span>';
+    }
+
+    function inspectionItems() {
+      const concentration = parseFloat(data.fructoseConcentration);
+      const content = parseFloat(data.fructoseContent);
+      return [
+        {
+          name: '果糖浓度',
+          standard: '40.0 - 45.0',
+          unit: '%',
+          value: data.fructoseConcentration,
+          pass: !isNaN(concentration) && concentration >= 40 && concentration <= 45,
+          note: ''
+        },
+        {
+          name: '果糖含量',
+          standard: '≥ 95.0',
+          unit: '%',
+          value: data.fructoseContent,
+          pass: !isNaN(content) && content >= 95,
+          note: '从质检科"果糖来料"检验数据选择'
+        },
+        {
+          name: '有无异味',
+          standard: '无异味',
+          unit: '—',
+          value: data.odor,
+          pass: data.odor === '无',
+          note: ''
+        },
+        {
+          name: '有无杂质',
+          standard: '无杂质',
+          unit: '—',
+          value: data.impurity,
+          pass: data.impurity === '无',
+          note: ''
+        }
+      ];
+    }
+
+    function opClass(op) {
+      if (op.type === 'create') return 'create';
+      if (op.type === 'submit') return 'submit';
+      if (op.action.includes('驳回')) return 'reject';
+      if (op.action.includes('审核')) return 'review';
+      return '';
+    }
+
+    page.innerHTML = `
+
+      <div class="card">
+        <div class="card-header"><div class="card-title">基础信息</div></div>
+        <div class="detail-meta">
+          <div class="detail-meta-item"><div class="lbl">记录编号</div><div class="val">${escapeHtml(data.id)}</div></div>
+          <div class="detail-meta-item"><div class="lbl">取样时间</div><div class="val">${escapeHtml(data.sampleTime)}</div></div>
+          <div class="detail-meta-item"><div class="lbl">批次号</div><div class="val">${escapeHtml(data.batchNo)}</div></div>
+          <div class="detail-meta-item"><div class="lbl">班次</div><div class="val">${escapeHtml(data.shift)}</div></div>
+          <div class="detail-meta-item"><div class="lbl">班组</div><div class="val">${escapeHtml(data.team)}</div></div>
+          <div class="detail-meta-item"><div class="lbl">取样人</div><div class="val">${escapeHtml(data.sampler)}</div></div>
+          <div class="detail-meta-item"><div class="lbl">化验员</div><div class="val">${escapeHtml(data.chemist)}</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">检验项目</div>
+          <span>${resultTag(data.result)}</span>
+        </div>
+        <div class="table-wrap inspection-entry-table">
+          <table class="table">
+            <thead>
+              <tr>
+                <th style="width:160px">检验项目</th>
+                <th>检验标准</th>
+                <th style="width:90px">单位</th>
+                <th style="width:220px">测定值</th>
+                <th style="width:130px">检验结果</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${inspectionItems().map(item => `
+                <tr ${item.pass ? '' : 'style="background:var(--danger-light)"'}>
+                  <td>${escapeHtml(item.name)}</td>
+                  <td>
+                    <div class="standard">${escapeHtml(item.standard)}</div>
+                    ${item.note ? `<div class="source-note">${escapeHtml(item.note)}</div>` : ''}
+                  </td>
+                  <td>${escapeHtml(item.unit)}</td>
+                  <td>${escapeHtml(item.value)}${item.unit === '%' ? '%' : ''}</td>
+                  <td>${item.pass ? '<span class="tag tag-green">合格</span>' : '<span class="tag tag-red">不合格</span>'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">操作记录 <span class="text-3" style="font-weight:400;font-size:12px">按时间倒序，记录每次编辑前后值</span></div>
+          ${canShowDiff ? '<button class="btn btn-sm" onclick="toast(\'已导出操作记录\', \'success\')">⤓ 导出操作记录</button>' : ''}
+        </div>
+        <ul class="oplog-list">
+          ${MOCK.incomingInspectionOpLog.map((op, idx) => {
+            const isEdit = op.type === 'edit' && op.diff;
+            return `
+              <li class="oplog-item ${opClass(op)}">
+                <div class="oplog-head">
+                  <span class="time">${op.time}</span>
+                  <span class="user">${op.user}</span>
+                  <span class="action">· ${op.action}</span>
+                  ${isEdit ? `<span class="summary">修改了 ${op.diff.length} 个字段</span>` : ''}
+                  ${isEdit && canShowDiff ? `<span class="toggle" onclick="toggleDiff(${idx})">展开 ▾</span>` : ''}
+                  ${isEdit && !canShowDiff ? '<span class="text-3" style="font-size:12px">（明细仅班组长及以上可见）</span>' : ''}
+                </div>
+                ${isEdit && canShowDiff ? `
+                  <div class="oplog-detail" id="diff-${idx}">
+                    ${op.diff.map(d => `
+                      <div class="oplog-diff-row">
+                        <span class="field">${d.field}</span>
+                        <span class="old">${d.old}</span>
+                        <span class="arrow">→</span>
+                        <span class="new">${d.new}</span>
+                      </div>
+                    `).join('')}
+                  </div>
+                ` : ''}
+              </li>
+            `;
+          }).join('')}
+        </ul>
+      </div>
+    `;
+
+    window.toggleDiff = function (idx) {
+      const el = document.getElementById('diff-' + idx);
+      if (el) el.classList.toggle('open');
+    };
+
+    window.onDel = function () {
+      confirmDialog('删除来料检验记录', `确定删除记录 <b>${data.id}</b>？删除动作将保留在操作记录中。`, () => {
+        toast('已删除来料检验记录', 'success');
+        setTimeout(() => location.href = './list.html', 800);
+      });
+    };
+  </script>
+</body>
+</html>

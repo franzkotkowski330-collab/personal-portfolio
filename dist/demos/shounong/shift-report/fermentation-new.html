@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <title>辅料班报表 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+  <style>
+    .multi-row-table { overflow-x: auto; }
+    .multi-row-table input,
+    .multi-row-table select {
+      width: 100%; min-width: 70px; height: 30px;
+      padding: 0 6px; font-size: 12.5px;
+    }
+    .auto-cell input { background: var(--bg-soft); color: var(--text-2); }
+    .group-tag {
+      display: inline-block; padding: 2px 8px; border-radius: 10px;
+      font-size: 11px; margin-left: 6px;
+    }
+    .group-base { background: #fff7e6; color: #d46b08; }
+    .group-salt { background: #f0f9eb; color: #389e0d; }
+    .group-trace { background: #f0e6ff; color: #722ed1; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const isEdit = params.get('edit') === '1';
+    const isView = params.get('view') === '1';
+    const id = params.get('id');
+    const cfg = MOCK.fmReportConfig;
+
+    // 给辅料分组（基础培养 / 营养盐 / 微量元素），便于阅读
+    const baseNames = ['四环素', '磷酸', '氨水', '消泡剂', '75%乙醇', '99.7%乙醇'];
+    const traceNames = ['硫酸锌', '硫酸锰', '氯化铁', '硫酸铜'];
+    function groupOf(name) {
+      if (baseNames.includes(name)) return { label: '消毒/抑菌', cls: 'group-base' };
+      if (traceNames.includes(name)) return { label: '微量元素', cls: 'group-trace' };
+      return { label: '培养基', cls: 'group-salt' };
+    }
+
+    const page = renderLayout({
+      activeKey: 'sr-fm',
+      breadcrumb: [
+        { label: '业务工作' },
+        { label: '辅料班报表', href: './fermentation-list.html' },
+        { label: isView ? '查看' : (isEdit ? '编辑' : '新建') }
+      ]
+    });
+
+    const userName = localStorage.getItem('userName') || '赵六';
+
+    page.innerHTML = `
+
+      <div class="card">
+        <div class="card-header"><div class="card-title">表头信息</div></div>
+        <div class="form-row">
+          <div class="form-item">
+            <label class="form-label"><span class="required">*</span> 日期</label>
+            <input type="date" value="2026-05-07" ${isView ? 'disabled' : ''} />
+          </div>
+          <div class="form-item">
+            <label class="form-label"><span class="required">*</span> 班次</label>
+            <select ${isView ? 'disabled' : ''}><option>白班</option><option>夜班</option></select>
+          </div>
+          <div class="form-item">
+            <label class="form-label"><span class="required">*</span> 班组</label>
+            <select ${isView ? 'disabled' : ''}><option>甲班</option><option>乙班</option><option>丙班</option></select>
+          </div>
+          <div class="form-item">
+            <label class="form-label">记录人</label>
+            <input type="text" value="${userName}" disabled />
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">发酵辅料消耗明细 <span class="text-3" style="font-weight:400;font-size:12px">· 共 ${cfg.auxiliaries.length} 种</span></div>
+        </div>
+        <div class="multi-row-table">
+          <table class="table">
+            <thead>
+              <tr>
+                <th style="width:40px;text-align:center">#</th>
+                <th style="width:200px">辅料名称</th>
+                <th style="width:80px">单位</th>
+                <th style="width:120px"><span class="text-danger">*</span> 昨日结存</th>
+                <th style="width:120px"><span class="text-danger">*</span> 今日领用</th>
+                <th style="width:120px"><span class="text-danger">*</span> 今日耗用</th>
+                <th style="width:120px">今日结存</th>
+                <th style="width:120px">吨耗</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${cfg.auxiliaries.map((a, i) => {
+                const g = groupOf(a.name);
+                const demoVal = (max) => (Math.random() * max).toFixed(a.unit === 'g' ? 1 : 2);
+                return `
+                  <tr>
+                    <td style="text-align:center;color:var(--text-3)">${i+1}</td>
+                    <td>
+                      <b>${a.name}</b>
+                      <span class="group-tag ${g.cls}">${g.label}</span>
+                    </td>
+                    <td>${a.unit}</td>
+                    <td><input type="number" value="${(isEdit||isView) ? demoVal(50) : ''}" ${isView ? 'disabled' : ''} /></td>
+                    <td><input type="number" value="${(isEdit||isView) ? demoVal(20) : ''}" ${isView ? 'disabled' : ''} /></td>
+                    <td><input type="number" value="${(isEdit||isView) ? demoVal(15) : ''}" ${isView ? 'disabled' : ''} /></td>
+                    <td class="auto-cell"><input type="number" readonly value="${(isEdit||isView) ? demoVal(50) : ''}" /></td>
+                    <td><input type="number" value="${(isEdit||isView) ? demoVal(0.5) : ''}" ${isView ? 'disabled' : ''} /></td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+        <div class="text-3" style="font-size:12px;margin-top:10px;line-height:1.7">
+          💡 <b>今日结存</b> = 昨日结存 + 今日领用 - 今日耗用，由系统自动计算<br/>
+          🏷 <b>分组说明：</b>
+          <span class="group-tag group-base">消毒/抑菌</span>用于发酵环境消毒；
+          <span class="group-tag group-salt">培养基</span>提供菌体生长营养；
+          <span class="group-tag group-trace">微量元素</span>调控菌体代谢
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><div class="card-title">备注</div></div>
+        <textarea ${isView ? 'disabled' : ''} placeholder="本班次特殊情况说明...">${(isEdit||isView) ? '本班次F1#发酵罐进入对数生长期，营养盐补充适当增加。' : ''}</textarea>
+      </div>
+
+      ${(isEdit || isView) ? renderOpLog() : ''}
+
+      <div class="text-center" style="padding:8px 0 24px">
+        <button class="btn" onclick="history.back()">${isView ? '返回' : '取消'}</button>
+        ${!isView ? '<button class="btn" onclick="onSave(\'draft\')">保存草稿</button>' : ''}
+        ${!isView ? '<button class="btn btn-primary" onclick="onSave(\'submit\')">正式提交</button>' : ''}
+      </div>
+    `;
+
+    function renderOpLog() {
+      return `
+        <div class="card">
+          <div class="card-header"><div class="card-title">操作记录</div></div>
+          <ul class="timeline">
+            <li><div class="time">2026-05-07 19:50</div><div class="content"><b>赵六</b> · <span class="tag tag-blue">正式提交</span></div></li>
+            <li>
+              <div class="time">2026-05-07 19:30</div>
+              <div class="content">
+                <div><b>赵六</b> · <span class="tag tag-orange">编辑保存</span></div>
+                <div class="diff-row"><span class="field">酵母粉-今日耗用：</span><span class="old">8.5</span> → <span class="new">12.0</span></div>
+                <div class="diff-row"><span class="field">磷酸氢二钾-今日领用：</span><span class="old">5.0</span> → <span class="new">5.5</span></div>
+              </div>
+            </li>
+            <li><div class="time">2026-05-07 16:30</div><div class="content"><b>赵六</b> · <span class="tag tag-green">创建</span></div></li>
+          </ul>
+        </div>
+      `;
+    }
+
+    window.onSave = (mode) => {
+      if (mode === 'draft') toast('草稿已保存', 'success');
+      else { toast('已正式提交，等待车间管理员审核', 'success'); setTimeout(() => location.href = './fermentation-list.html', 800); }
+    };
+  </script>
+</body>
+</html>

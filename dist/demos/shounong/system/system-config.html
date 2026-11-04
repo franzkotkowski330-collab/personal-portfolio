@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <title>系统配置 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script>
+    const page = renderLayout({
+      activeKey: 'sys-config',
+      breadcrumb: [{ label: '系统管理' }, { label: '系统配置' }]
+    });
+
+    page.innerHTML = `
+      <div class="two-col">
+        <div class="card">
+          <div class="card-header"><div class="card-title">登录与会话</div></div>
+          <div class="form-row" style="padding:0 16px 16px">
+            <div class="form-item">
+              <label class="form-label">会话超时（分钟）</label>
+              <input type="number" value="30" />
+              <div class="form-help">超过该时间无操作自动登出（PRD：30分钟）</div>
+            </div>
+            <div class="form-item">
+              <label class="form-label">连续登录失败锁定次数</label>
+              <input type="number" value="5" />
+            </div>
+            <div class="form-item">
+              <label class="form-label">账号锁定时长（分钟）</label>
+              <input type="number" value="15" />
+            </div>
+            <div class="form-item">
+              <label class="form-label">登录后默认班次</label>
+              <select><option>按当前时间自动判断</option><option>白班</option><option>晚班</option></select>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><div class="card-title">密码策略</div></div>
+          <div class="form-row" style="padding:0 16px 16px">
+            <div class="form-item">
+              <label class="form-label">最小长度</label>
+              <input type="number" value="8" />
+            </div>
+            <div class="form-item">
+              <label class="form-label">最大长度</label>
+              <input type="number" value="20" />
+            </div>
+            
+            <div class="form-item" style="grid-column:span 2">
+              <label style="display:flex;align-items:center;gap:8px;font-size:13px">
+                <input type="checkbox" checked disabled /> 须包含字母和数字
+              </label>
+              <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-top:8px">
+                <input type="checkbox" checked disabled /> 首次登录强制修改初始密码
+              </label>
+              <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-top:8px">
+                <input type="checkbox" checked disabled /> 不可与最近 3 次密码相同
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <div class="card-header"><div class="card-title">其他</div></div>
+        <table class="table">
+          <thead><tr><th>配置项</th><th>当前值</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td>HTTPS 传输</td><td><span class="tag tag-green">已启用</span></td><td>生产环境强制 HTTPS</td></tr>
+            <tr><td>自助找回密码</td><td><span class="tag tag-orange">待确认</span></td><td>手机验证码或仅管理员重置</td></tr>
+            <tr><td>SSO 单点登录</td><td><span class="tag tag-orange">待确认</span></td><td>P0 支持账号密码，SSO 待业务确认</td></tr>
+            <tr><td>操作记录防篡改</td><td><span class="tag tag-green">已启用</span></td><td>含系统管理员不可修改/删除</td></tr>
+          </tbody>
+        </table>
+      </div>
+    `;
+  </script>
+</body>
+</html>

@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <title>班报表 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script>
+    const page = renderLayout({
+      activeKey: 'sr-aux',
+      breadcrumb: [{ label: '业务工作' }, { label: '班报表' }]
+    });
+
+    const list = MOCK.shiftList.filter(r => r.type === '辅料班报表');
+
+    page.innerHTML = `
+      <div class="query-card">
+        <div class="query-fields">
+          <span class="query-field q-w-range"><label>日期范围</label><input type="date" value="2026-05-01" /><span class="date-sep">至</span><input type="date" value="2026-05-07" /></span>
+          <span class="query-field"><label>班次</label><select><option>全部班次</option><option>白班</option><option>夜班</option></select></span>
+          <span class="query-field"><label>班组</label><select><option>全部班组</option><option>甲班</option><option>乙班</option><option>丙班</option></select></span>
+          <span class="query-field"><label>状态</label><select><option>全部状态</option><option>草稿</option><option>已提交</option><option>已审核</option></select></span>
+        </div>
+        <div class="query-actions">
+          <button class="btn">重置</button>
+          <button class="btn btn-primary">查询</button>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-toolbar">
+          <span class="text-3">共 ${list.length} 条</span>
+          <div>
+            <button class="btn" onclick="toast('请选择要显示的列', 'info')">配置列表字段</button>
+            <button class="btn">导出</button>
+            <button class="btn btn-primary" onclick="location.href='./auxiliary-new.html'">新增</button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>单据编号</th>
+                <th>日期</th>
+                <th>班次</th>
+                <th>班组</th>
+                <th>填报人</th>
+                <th>是否有超耗</th>
+                <th>状态</th>
+                <th class="col-actions">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${list.map(r => `
+                <tr>
+                  <td><a class="text-primary fw-500" href="./auxiliary-new.html?id=${r.id}&view=1">${r.id}</a></td>
+                  <td>${r.date}</td>
+                  <td>${r.shift}</td>
+                  <td>${r.team}</td>
+                  <td>${r.creator}</td>
+                  <td>${r.overuse ? '<span class="tag tag-red">超耗 ⚠</span>' : '<span class="text-3">无</span>'}</td>
+                  <td>${statusTag(r.status)}</td>
+                  <td class="col-actions">
+                    <button class="btn-text" onclick="location.href='./auxiliary-new.html?id=${r.id}&view=1'">查看</button>
+                    ${(r.status === 'draft' || r.status === 'rejected') ? `<button class="btn-text" onclick="location.href='./auxiliary-new.html?id=${r.id}&edit=1'">编辑</button>` : ''}
+                    ${(r.status === 'draft' || r.status === 'rejected') ? `<button class="btn-text danger" onclick="confirmDel('${r.id}')">删除</button>` : ''}
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+        <div class="pagination-v2">
+          <span class="pagination-total">共 ${list.length} 条</span>
+          <select class="pagination-size"><option>100条/页</option><option>200条/页</option><option>300条/页</option><option>400条/页</option></select>
+          <button disabled>«</button><button disabled>‹</button><button class="active">1</button><button>›</button><button>»</button>
+          <span class="pagination-jumper">跳至 <input type="number" min="1" value="1" /> 页</span>
+        </div>
+      </div>
+
+      <div class="card" style="border-left:4px solid var(--info)">
+        <div style="font-weight:500;margin-bottom:6px;color:var(--info)">💡 辅料班报表说明</div>
+        <div class="text-2" style="line-height:1.7;font-size:13px">
+          • <b>每班次每种班报表原则上只提交一份</b>；若已有草稿，新建时系统提示打开现有草稿<br/>
+          • 已提交状态禁止任何角色删除（保留物料追溯凭证）；草稿/被驳回状态由班组长或管理员可删<br/>
+          • <b>今日结存</b> = 昨日结存 + 今日领用 - 今日耗用，由系统自动计算
+        </div>
+      </div>
+    `;
+    window.confirmDel = (id) => confirmDialog('删除辅料班报表', `确认删除 <b>${id}</b>？`, () => toast('已删除', 'success'));
+  </script>
+</body>
+</html>

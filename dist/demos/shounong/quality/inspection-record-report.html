@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>检验记录表 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script>
+    const page = renderLayout({
+      activeKey: 'quality-inspection-record-report',
+      breadcrumb: [
+        { label: '业务工作' },
+        { label: '工序检验', href: './list.html?type=im1' },
+        { label: '检验记录表' }
+      ]
+    });
+
+    const allRows = MOCK.qualityInspectionReportRows || [];
+
+    function resultCell(r) {
+      if (r.exceed) {
+        return `<span class="tag tag-red">${escapeHtml(r.result)}</span>`;
+      }
+      if (r.result === '合格') {
+        return `<span class="tag tag-green">${escapeHtml(r.result)}</span>`;
+      }
+      return escapeHtml(r.result || '—');
+    }
+
+    function escapeHtml(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function applyFilter() {
+      const t = document.getElementById('f-type').value;
+      const p = document.getElementById('f-process').value;
+      const d0 = document.getElementById('f-date-start').value;
+      const d1 = document.getElementById('f-date-end').value;
+      const sh = document.getElementById('f-shift').value;
+      return allRows.filter((r) => {
+        if (t && r.billType !== t) return false;
+        if (p && r.process !== p) return false;
+        if (d0 && r.date < d0) return false;
+        if (d1 && r.date > d1) return false;
+        if (sh && r.shift !== sh) return false;
+        return true;
+      });
+    }
+
+    function buildProcessOptions() {
+      const set = new Set(allRows.map((r) => r.process));
+      return ['<option value="">全部工序</option>']
+        .concat([...set].sort((a, b) => a.localeCompare(b, 'zh-CN')).map((x) => `<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`))
+        .join('');
+    }
+
+    function renderReport() {
+      const rows = applyFilter();
+      const byProc = {};
+      rows.forEach((r) => {
+        if (!byProc[r.process]) byProc[r.process] = [];
+        byProc[r.process].push(r);
+      });
+      const procNames = Object.keys(byProc).sort((a, b) => a.localeCompare(b, 'zh-CN'));
+      const root = document.getElementById('report-sections');
+      const stat = document.getElementById('report-stat');
+      if (stat) {
+        stat.textContent = `当前筛选共 ${rows.length} 条测定明细，覆盖 ${procNames.length} 个工序`;
+      }
+      if (!root) return;
+      if (!procNames.length) {
+        root.innerHTML = '<div class="card"><div class="text-3" style="text-align:center;padding:32px">暂无数据，请调整筛选条件</div></div>';
+        return;
+      }
+      root.innerHTML = procNames.map((proc) => {
+        const list = byProc[proc].slice().sort((a, b) => {
+          if (a.date !== b.date) return b.date.localeCompare(a.date);
+          return (b.billId || '').localeCompare(a.billId || '');
+        });
+        const body = list.map((r) => `
+          <tr ${r.exceed ? 'style="background:var(--danger-light)"' : ''}>
+            <td><a class="text-primary fw-500" href="./detail.html?id=${encodeURIComponent(r.billId)}">${escapeHtml(r.billId)}</a></td>
+            <td>${escapeHtml(r.billTypeLabel)}</td>
+            <td>${escapeHtml(r.date)}</td>
+            <td>${escapeHtml(r.shift)}</td>
+            <td>${escapeHtml(r.team)}</td>
+            <td>${escapeHtml(r.division || '—')}</td>
+            <td>${escapeHtml(r.device || '—')}</td>
+            <td><b>${escapeHtml(r.item)}</b></td>
+            <td style="font-size:12.5px;color:var(--text-2)">${escapeHtml(r.specText)}</td>
+            <td>${escapeHtml(r.unit || '—')}</td>
+            <td><b>${escapeHtml(r.measuredValue)}</b></td>
+            <td>${resultCell(r)}</td>
+            <td>${escapeHtml(r.inspector || '—')}</td>
+          </tr>
+        `).join('');
+        return `
+          <div class="card" style="margin-bottom:16px">
+            <div class="card-header">
+              <div class="card-title">工序：${escapeHtml(proc)} <span class="text-3" style="font-weight:400;font-size:12px">（${list.length} 条检验项目测定）</span></div>
+            </div>
+            <div class="table-wrap">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="min-width:128px">检验单号</th>
+                    <th style="min-width:100px">检验类型</th>
+                    <th style="min-width:102px">检验日期</th>
+                    <th>班次</th>
+                    <th>班组</th>
+                    <th style="min-width:96px">工序分组</th>
+                    <th style="min-width:88px">取样设备</th>
+                    <th style="min-width:88px">检验项目</th>
+                    <th style="min-width:120px">检验标准</th>
+                    <th>单位</th>
+                    <th style="min-width:88px">测定值</th>
+                    <th style="min-width:88px">检验结果</th>
+                    <th style="min-width:72px">检验人</th>
+                  </tr>
+                </thead>
+                <tbody>${body}</tbody>
+              </table>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    page.innerHTML = `
+      <div class="card">
+        <div class="filter-bar">
+          <span class="query-field q-w-lg"><label>检验类型</label>
+          <select id="f-type">
+            <option value="">全部类型</option>
+            <option value="fermentation">发酵工段质检</option>
+            <option value="im1">中间体检验</option>
+            <option value="im2">中间体2质检</option>
+            <option value="qc">质检科检验</option>
+          </select></span>
+          <span class="query-field q-w-lg"><label>工序</label>
+          <select id="f-process">${buildProcessOptions()}</select></span>
+          <span class="query-field q-w-range"><label>日期范围</label>
+          <input id="f-date-start" type="date" value="2026-05-01" title="起始日期" />
+          <span class="date-sep">至</span>
+          <input id="f-date-end" type="date" value="2026-05-13" title="结束日期" /></span>
+          <span class="query-field q-w-sm"><label>班次</label>
+          <select id="f-shift">
+            <option value="">全部班次</option>
+            <option value="白班">白班</option>
+            <option value="夜班">夜班</option>
+          </select></span>
+          <span class="filter-actions">
+            <button type="button" class="btn" id="btn-reset">重置</button>
+            <button type="button" class="btn btn-primary" id="btn-query">查询</button>
+          </span>
+        </div>
+        <div id="report-stat" class="text-3" style="font-size:13px;margin:0 0 12px 4px"></div>
+        <div id="report-sections"></div>
+      </div>
+
+      <div class="card" style="border-left:4px solid var(--info)">
+        <div style="font-weight:500;margin-bottom:6px;color:var(--info)">说明</div>
+        <div class="text-2" style="line-height:1.7;font-size:13px">
+          • 本表将各质检单中的明细行展开，按<b>工序</b>分块展示，便于对照纸质「检验记录」台账。<br/>
+          • 每一行对应一次「工序 + 检验项目」的测定值；点击<b>检验单号</b>可跳转工序检验详情。<br/>
+          • 正式环境中数据由工序检验模块实时汇总；原型使用 <code>MOCK.qualityInspectionReportRows</code> 演示。
+        </div>
+      </div>
+    `;
+
+    document.getElementById('btn-query').addEventListener('click', () => {
+      renderReport();
+      toast('已应用筛选', 'success');
+    });
+    document.getElementById('btn-reset').addEventListener('click', () => {
+      document.getElementById('f-type').value = '';
+      document.getElementById('f-process').value = '';
+      document.getElementById('f-date-start').value = '2026-05-01';
+      document.getElementById('f-date-end').value = '2026-05-13';
+      document.getElementById('f-shift').value = '';
+      renderReport();
+      toast('已重置筛选', 'success');
+    });
+    renderReport();
+  </script>
+</body>
+</html>

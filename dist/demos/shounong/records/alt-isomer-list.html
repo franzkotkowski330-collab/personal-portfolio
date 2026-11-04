@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>阿糖异构原始记录 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script>
+    const FIELDS = MOCK.altIsomerRecordFields;
+    const LIST = MOCK.altIsomerRecordList;
+    const STORAGE_KEY = 'altIsomerRecord.visibleFields.v1';
+    const SORT_KEY = 'altIsomerRecord.sortState.v1';
+    const allFieldKeys = FIELDS.map(f => f.key);
+
+    let visibleKeys = loadVisibleKeys();
+    let sortState = loadSortState();
+    let filters = { keyword: '', start: '', end: '', shift: '', team: '', tankNo: '' };
+
+    const page = renderLayout({
+      activeKey: 'records-alt-isomer',
+      breadcrumb: [{ label: '业务工作' }, { label: '原始记录表' }, { label: '阿糖异构原始记录' }]
+    });
+
+    function loadVisibleKeys() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+        if (Array.isArray(saved) && saved.length) {
+          return saved.filter(k => allFieldKeys.includes(k));
+        }
+      } catch (e) {}
+      return FIELDS.filter(f => f.defaultVisible).map(f => f.key);
+    }
+    function saveVisibleKeys(keys) {
+      visibleKeys = keys.filter(k => allFieldKeys.includes(k));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(visibleKeys));
+    }
+    function loadSortState() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(SORT_KEY) || 'null');
+        if (saved && saved.key) return saved;
+      } catch (e) {}
+      return { key: 'id', dir: 'desc' };
+    }
+    function saveSortState(s) {
+      sortState = s;
+      localStorage.setItem(SORT_KEY, JSON.stringify(s));
+    }
+
+    function fieldOf(key) { return FIELDS.find(f => f.key === key); }
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, s => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[s]));
+    }
+
+    function parseTime(value) {
+      if (!value) return 0;
+      return new Date(String(value).replace(' ', 'T')).getTime() || 0;
+    }
+
+    function formatValue(row, field) {
+      const v = row[field.key];
+      if (field.key === 'id') {
+        return `<a class="text-primary fw-500" href="./alt-isomer-detail.html?id=${encodeURIComponent(row.id)}">${escapeHtml(row.id)}</a>`;
+      }
+      if (v === undefined || v === null || v === '') return '<span class="text-3">—</span>';
+      return escapeHtml(v);
+    }
+
+    function getFilteredList() {
+      const keyword = filters.keyword.trim().toLowerCase();
+      let list = LIST.filter(row => {
+        const hitKeyword = !keyword
+          || row.id.toLowerCase().includes(keyword)
+          || String(row.batchNo || '').toLowerCase().includes(keyword)
+          || String(row.creator || '').toLowerCase().includes(keyword);
+        const hitStart = !filters.start || parseTime(row.feedTime) >= parseTime(filters.start);
+        const hitEnd = !filters.end || parseTime(row.feedTime) <= parseTime(filters.end);
+        const hitShift = !filters.shift || row.shift === filters.shift;
+        const hitTeam = !filters.team || row.team === filters.team;
+        const hitTank = !filters.tankNo || row.tankNo === filters.tankNo;
+        return hitKeyword && hitStart && hitEnd && hitShift && hitTeam && hitTank;
+      });
+
+      list = list.slice().sort((a, b) => {
+        const f = fieldOf(sortState.key);
+        let av = a[sortState.key], bv = b[sortState.key];
+        if (f && (f.key.endsWith('Time') || f.key === 'createdAt' || f.key === 'date')) {
+          av = parseTime(av); bv = parseTime(bv);
+        } else if (typeof av === 'number' || typeof bv === 'number') {
+          av = Number(av) || 0; bv = Number(bv) || 0;
+        } else {
+          av = String(av || ''); bv = String(bv || '');
+        }
+        const ret = av > bv ? 1 : av < bv ? -1 : 0;
+        return sortState.dir === 'asc' ? ret : -ret;
+      });
+      return list;
+    }
+
+    function renderHeaderCell(field) {
+      const sortable = field.sortable;
+      const mark = (sortState.key === field.key) ? `<span class="sort-mark">${sortState.dir === 'asc' ? '↑' : '↓'}</span>` : '';
+      return sortable
+        ? `<th class="sortable-th" onclick="sortBy('${field.key}')">${escapeHtml(field.label)}${mark}</th>`
+        : `<th>${escapeHtml(field.label)}</th>`;
+    }
+
+    function render() {
+      const fields = visibleKeys.map(fieldOf).filter(Boolean);
+      const list = getFilteredList();
+      page.innerHTML = `
+        <div class="query-card">
+          <div class="query-card-body">
+            <span class="query-field q-w-md">
+              <label>记录编号</label>
+              <input id="keyword" type="text" placeholder="请输入" value="${escapeHtml(filters.keyword)}" />
+            </span>
+            <span class="query-field q-w-range">
+              <label>进料时间</label>
+              <input id="start" type="datetime-local" value="${escapeHtml(filters.start)}" title="进料时间起" />
+              <span class="date-sep">至</span>
+              <input id="end" type="datetime-local" value="${escapeHtml(filters.end)}" title="进料时间止" />
+            </span>
+            <span class="query-field">
+              <label>班次</label>
+              <select id="shift">
+                <option value="">全部班次</option>
+                <option ${filters.shift === '白班' ? 'selected' : ''}>白班</option>
+                <option ${filters.shift === '夜班' ? 'selected' : ''}>夜班</option>
+              </select>
+            </span>
+            <span class="query-field">
+              <label>班组</label>
+              <select id="team">
+                <option value="">全部班组</option>
+                <option ${filters.team === '甲班' ? 'selected' : ''}>甲班</option>
+                <option ${filters.team === '乙班' ? 'selected' : ''}>乙班</option>
+                <option ${filters.team === '丙班' ? 'selected' : ''}>丙班</option>
+              </select>
+            </span>
+            <span class="query-field">
+              <label>罐号</label>
+              <select id="tankNo">
+                <option value="">全部罐号</option>
+                ${MOCK.altIsomerTanks.map(t => `<option ${filters.tankNo === t ? 'selected' : ''}>${t}</option>`).join('')}
+              </select>
+            </span>
+            <div class="query-actions">
+              <button class="btn" onclick="resetFilters()">重置</button>
+              <button class="btn btn-primary" onclick="applyFilters()">查询</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-card">
+          <div class="table-toolbar">
+            <div class="table-toolbar-right">
+              <button class="btn" onclick="openFieldConfig()">⚙ 配置列表字段</button>
+              <button class="btn" onclick="toast('已导出阿糖异构原始记录', 'success')">⤓ 导出</button>
+              <button class="btn btn-primary" onclick="location.href='./alt-isomer-new.html'">新增</button>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  ${fields.map(renderHeaderCell).join('')}
+                  <th class="col-actions" style="width:160px">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${list.length ? list.map(row => `
+                  <tr>
+                    ${fields.map(f => `<td>${formatValue(row, f)}</td>`).join('')}
+                    <td class="col-actions">
+                      <button class="btn-text" onclick="location.href='./alt-isomer-detail.html?id=${encodeURIComponent(row.id)}'">查看</button>
+                      ${(row.status === 'draft' || row.status === 'rejected') ? `<button class="btn-text" onclick="location.href='./alt-isomer-new.html?id=${encodeURIComponent(row.id)}&edit=1'">编辑</button>` : ''}
+                      ${(row.status === 'draft' || row.status === 'rejected') ? `<button class="btn-text danger" onclick="confirmDel('${escapeHtml(row.id)}')">删除</button>` : ''}
+                    </td>
+                  </tr>
+                `).join('') : `
+                  <tr><td colspan="${fields.length + 1}"><div class="empty" style="padding:32px">暂无符合条件的数据</div></td></tr>
+                `}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="pagination-v2">
+            <span class="pagination-total">共 ${list.length} 条</span>
+            <select class="pagination-size"><option>100条/页</option><option>200条/页</option><option>300条/页</option><option>400条/页</option></select>
+            <button disabled>«</button><button disabled>‹</button><button class="active">1</button><button>›</button><button>»</button>
+            <span class="pagination-jumper">跳至 <input type="number" min="1" value="1" /> 页</span>
+          </div>
+        </div>
+      `;
+    }
+
+    window.applyFilters = function () {
+      filters = {
+        keyword: document.getElementById('keyword').value,
+        start: document.getElementById('start').value,
+        end: document.getElementById('end').value,
+        shift: document.getElementById('shift').value,
+        team: document.getElementById('team').value,
+        tankNo: document.getElementById('tankNo').value
+      };
+      render();
+    };
+
+    window.resetFilters = function () {
+      filters = { keyword: '', start: '', end: '', shift: '', team: '', tankNo: '' };
+      render();
+    };
+
+    window.sortBy = function (key) {
+      const f = fieldOf(key);
+      if (!f || !f.sortable) return;
+      const next = sortState.key === key
+        ? { key, dir: sortState.dir === 'asc' ? 'desc' : 'asc' }
+        : { key, dir: 'desc' };
+      saveSortState(next);
+      render();
+    };
+
+    window.confirmDel = function (id) {
+      confirmDialog('删除阿糖异构原始记录', `确认删除记录 <b>${escapeHtml(id)}</b>？`, () => {
+        toast('已删除', 'success');
+      });
+    };
+
+    // ====== 配置列表字段 弹窗 ======
+    function selectedFieldHtml(keys) {
+      return keys.map((key, idx) => {
+        const f = fieldOf(key);
+        if (!f) return '';
+        return `
+          <div class="selected-field" draggable="true" data-key="${key}">
+            <span class="drag-handle">☰</span>
+            <span class="name">${escapeHtml(f.label)}</span>
+            <span class="cat">${escapeHtml(f.category)}</span>
+            <span class="field-meta">${idx + 1}</span>
+            <button class="btn btn-sm" onclick="moveFieldInModal('${key}', -1)">上移</button>
+            <button class="btn btn-sm" onclick="moveFieldInModal('${key}', 1)">下移</button>
+          </div>
+        `;
+      }).join('');
+    }
+
+    window.syncSelectedFields = function () {
+      const checked = Array.from(document.querySelectorAll('[data-field-check]:checked')).map(x => x.value);
+      const current = Array.from(document.querySelectorAll('.selected-field')).map(x => x.dataset.key);
+      const ordered = current.filter(k => checked.includes(k)).concat(checked.filter(k => !current.includes(k)));
+      document.getElementById('selected-fields').innerHTML = selectedFieldHtml(ordered);
+      bindModalDrag();
+      document.getElementById('selected-count').textContent = ordered.length;
+    };
+
+    window.moveFieldInModal = function (key, step) {
+      const list = Array.from(document.querySelectorAll('.selected-field')).map(x => x.dataset.key);
+      const idx = list.indexOf(key);
+      const next = idx + step;
+      if (idx < 0 || next < 0 || next >= list.length) return;
+      [list[idx], list[next]] = [list[next], list[idx]];
+      document.getElementById('selected-fields').innerHTML = selectedFieldHtml(list);
+      bindModalDrag();
+    };
+
+    function bindModalDrag() {
+      document.querySelectorAll('.selected-field').forEach(el => {
+        el.addEventListener('dragstart', e => e.dataTransfer.setData('text/plain', el.dataset.key));
+        el.addEventListener('dragover', e => e.preventDefault());
+        el.addEventListener('drop', e => {
+          e.preventDefault();
+          const from = e.dataTransfer.getData('text/plain');
+          const to = el.dataset.key;
+          const list = Array.from(document.querySelectorAll('.selected-field')).map(x => x.dataset.key);
+          const fromIdx = list.indexOf(from);
+          const toIdx = list.indexOf(to);
+          if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return;
+          list.splice(toIdx, 0, list.splice(fromIdx, 1)[0]);
+          document.getElementById('selected-fields').innerHTML = selectedFieldHtml(list);
+          bindModalDrag();
+        });
+      });
+    }
+
+    function groupedFieldsHtml() {
+      // 按 category 父级分组展示（图示：全部字段以"3.1.2 列表字段"为父级分类）
+      const groups = {};
+      FIELDS.forEach(f => {
+        (groups[f.category] = groups[f.category] || []).push(f);
+      });
+      const allChecked = visibleKeys.length === FIELDS.length;
+      let html = `
+        <label style="display:flex;gap:6px;margin-bottom:10px;font-size:13px;font-weight:500">
+          <input type="checkbox" id="check-all" onchange="onCheckAll(this)" ${allChecked ? 'checked' : ''} />
+          全选
+        </label>
+      `;
+      Object.keys(groups).forEach(cat => {
+        html += `<div class="field-group">
+          <div class="field-group-title">${escapeHtml(cat)}</div>
+          <div class="field-check-list">
+            ${groups[cat].map(f => `
+              <label>
+                <input data-field-check type="checkbox" value="${f.key}"
+                  onchange="syncSelectedFields()"
+                  ${visibleKeys.includes(f.key) ? 'checked' : ''} />
+                <span>${escapeHtml(f.label)}</span>
+              </label>
+            `).join('')}
+          </div>
+        </div>`;
+      });
+      return html;
+    }
+
+    window.onCheckAll = function (cb) {
+      document.querySelectorAll('[data-field-check]').forEach(x => x.checked = cb.checked);
+      syncSelectedFields();
+    };
+
+    window.openFieldConfig = function () {
+      const content = `
+        <div class="field-config">
+          <div class="field-panel">
+            <div class="field-panel-title">
+              <span>全部字段 <span class="field-meta">按模块分类</span></span>
+              <span class="field-meta">共 ${FIELDS.length} 个</span>
+            </div>
+            ${groupedFieldsHtml()}
+          </div>
+          <div class="field-panel">
+            <div class="field-panel-title">
+              <span>列表显示字段 <span class="field-meta">拖拽或按钮调整顺序</span></span>
+              <span class="field-meta">已选 <b id="selected-count">${visibleKeys.length}</b> 个</span>
+            </div>
+            <div id="selected-fields" class="selected-fields">${selectedFieldHtml(visibleKeys)}</div>
+          </div>
+        </div>
+        <div class="field-tip">
+          💡 每个用户可独立配置自己列表的字段显示和顺序，下次进入该列表时将自动加载最新配置（基于浏览器本地存储模拟）。
+        </div>
+      `;
+      confirmDialog('配置列表字段', content, () => {
+        const keys = Array.from(document.querySelectorAll('.selected-field')).map(x => x.dataset.key);
+        if (!keys.length) {
+          toast('请至少保留一列', 'warning');
+          return false;
+        }
+        saveVisibleKeys(keys);
+        toast('已保存列表字段配置', 'success');
+        render();
+      }, '保存');
+      setTimeout(bindModalDrag, 0);
+    };
+
+    render();
+  </script>
+</body>
+</html>

@@ -1,0 +1,657 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>工序管理 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+  <link rel="stylesheet" href="../assets/css/process-stage-select.css" />
+  <style>
+    .modal { width: 560px; }
+    .process-mgmt-page .filter-bar {
+      border-bottom: none;
+      padding-bottom: 0;
+      margin-bottom: 0;
+    }
+    .process-mgmt-page .table-toolbar {
+      border-bottom: none;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      padding-bottom: 0;
+    }
+    .process-mgmt-page .table-section-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-1);
+    }
+    .process-mgmt-page .process-data-table th,
+    .process-mgmt-page .process-data-table td {
+      color: #000;
+    }
+    .process-mgmt-page .process-data-table a {
+      color: #000;
+      font-weight: 500;
+    }
+    .column-config-search {
+      width: 100%;
+      height: 32px;
+      margin-bottom: 10px;
+      border: 1px solid var(--border-deep);
+      border-radius: 4px;
+      padding: 0 10px;
+      font-size: 13px;
+    }
+    .column-picker-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px 10px;
+    }
+    .column-picker-grid label {
+      display: flex;
+      align-items: center;
+      padding: 6px 8px;
+      cursor: pointer;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+    .column-picker-grid label:hover { background: #fff; }
+    .column-picker-empty {
+      grid-column: 1 / -1;
+      text-align: center;
+      color: var(--text-3);
+      padding: 24px 12px;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script src="../assets/js/process-stage-select.js"></script>
+  <script>
+    const PROCESS_STORAGE_KEY = 'basicData.processes.v1';
+    const PROCESS_LOG_STORAGE_KEY = 'basicData.processLogs.v1';
+
+    let filters = { stage: '', code: '', name: '', processType: '', createdAt: '' };
+    let processList = loadProcessList();
+    let processLogs = loadProcessLogs();
+    let sortOrder = 'desc'; // 'desc' 或 'asc'
+
+    // 列表字段配置
+    const allColumns = [
+      { key: 'stage', label: '工段' },
+      { key: 'code', label: '工序编号' },
+      { key: 'name', label: '工序名称' },
+      { key: 'processType', label: '工序类型' },
+      { key: 'createdAt', label: '创建时间' }
+    ];
+    let visibleColumns = loadColumnConfig() || allColumns.map(c => c.key);
+    let filterStageSelectInstance = null;
+
+    const page = renderLayout({
+      activeKey: 'process-management',
+      breadcrumb: [{ label: '基础数据管理' }, { label: '工序管理' }]
+    });
+
+    function loadProcessList() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(PROCESS_STORAGE_KEY) || 'null');
+        if (Array.isArray(saved)) return saved;
+      } catch (e) {}
+      return (MOCK.processManagementList || []).map(row => ({ ...row }));
+    }
+
+    function saveProcessList() {
+      localStorage.setItem(PROCESS_STORAGE_KEY, JSON.stringify(processList));
+    }
+
+    function loadProcessLogs() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(PROCESS_LOG_STORAGE_KEY) || '{}');
+        return { ...(MOCK.processManagementLogs || {}), ...(saved || {}) };
+      } catch (e) {
+        return { ...(MOCK.processManagementLogs || {}) };
+      }
+    }
+
+    function saveProcessLogs() {
+      localStorage.setItem(PROCESS_LOG_STORAGE_KEY, JSON.stringify(processLogs));
+    }
+
+    function loadColumnConfig() {
+      try {
+        const saved = JSON.parse(localStorage.getItem('basicData.processes.columns') || 'null');
+        return saved;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function saveColumnConfig() {
+      localStorage.setItem('basicData.processes.columns', JSON.stringify(visibleColumns));
+    }
+
+    function currentUser() {
+      return localStorage.getItem('userName') || '王尚革';
+    }
+
+    function nowText() {
+      const d = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, s => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[s]));
+    }
+
+    function getStages() {
+      return ['发酵', '果糖色谱分离', '阿糖异构', '固体精制', '蒸发结晶', '离心烘干', '固体包装', '质检科'];
+    }
+
+    function getProcessTypes() {
+      return ['流程工序', '质检专用工序'];
+    }
+
+    function stageTag(stage) {
+      const colorMap = {
+        '发酵': 'tag-blue',
+        '果糖色谱分离': 'tag-primary',
+        '阿糖异构': 'tag-orange',
+        '固体精制': 'tag-green',
+        '蒸发结晶': 'tag-orange',
+        '离心烘干': 'tag-grey',
+        '固体包装': 'tag-red'
+      };
+      return `<span class="tag ${colorMap[stage] || 'tag-grey'}">${escapeHtml(stage)}</span>`;
+    }
+
+    function getFilteredList() {
+      return processList.filter(row => {
+        const hitStage = !filters.stage || row.stage === filters.stage;
+        const hitCode = !filters.code || row.code.toLowerCase() === filters.code.trim().toLowerCase();
+        const hitName = !filters.name || row.name === filters.name.trim();
+        const hitProcessType = !filters.processType || row.processType === filters.processType;
+        const hitCreatedAt = !filters.createdAt || (row.createdAt && row.createdAt.startsWith(filters.createdAt));
+        return hitStage && hitCode && hitName && hitProcessType && hitCreatedAt;
+      }).sort((a, b) => {
+        const timeA = new Date(a.createdAt || '2026-01-01').getTime();
+        const timeB = new Date(b.createdAt || '2026-01-01').getTime();
+        return sortOrder === 'desc' ? timeB - timeA : timeA - timeB;
+      });
+    }
+
+    function getStats() {
+      const stages = getStages();
+      const enabledCount = processList.filter(row => row.enabled).length;
+      return { total: processList.length, stages: stages.length, enabled: enabledCount, disabled: processList.length - enabledCount };
+    }
+
+    function render() {
+      const list = getFilteredList();
+      const stages = getStages();
+      const processTypes = getProcessTypes();
+      const visibleCols = allColumns.filter(c => visibleColumns.includes(c.key));
+
+      page.innerHTML = `
+        <div class="process-mgmt-page">
+        <div class="card">
+          <div class="filter-bar">
+            <span class="query-field q-w-lg"><label><b>工段:</b></label>${ProcessStageSelect.render({
+              rootId: 'filter-stage-search-select',
+              hiddenId: 'stage',
+              inputId: 'filter-stage-input',
+              dropdownId: 'filter-stage-dropdown',
+              loadingId: 'filter-stage-loading',
+              toggleId: 'filter-stage-toggle',
+              value: filters.stage,
+              placeholder: '全部'
+            })}</span>
+            <span class="query-field q-w-md"><label><b>工序编号:</b></label><input id="code" type="text" value="${escapeHtml(filters.code)}" /></span>
+            <span class="query-field q-w-lg"><label><b>工序名称:</b></label><input id="name" type="text" value="${escapeHtml(filters.name)}" /></span>
+            <span class="query-field q-w-lg"><label><b>工序类型:</b></label><select id="processType">
+              <option value="">全部</option>
+              ${processTypes.map(type => `<option value="${escapeHtml(type)}" ${filters.processType === type ? 'selected' : ''}>${escapeHtml(type)}</option>`).join('')}
+            </select></span>
+            <span class="query-field q-w-date"><label><b>创建时间:</b></label><input id="createdAt" type="date"${filters.createdAt ? ` value="${escapeHtml(filters.createdAt)}"` : ''} /></span>
+            <span class="filter-actions">
+              <button class="btn" onclick="resetFilters()">重置</button>
+              <button class="btn btn-primary" onclick="applyFilters()">查询</button>
+            </span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="table-toolbar">
+            <span class="table-section-title">数据列表</span>
+            <div class="table-toolbar-right">
+              <button class="btn" onclick="openColumnConfig()">配置列表字段</button>
+              <button class="btn" onclick="exportList()">导出</button>
+              <button class="btn btn-primary" onclick="openProcessEditor()">新增</button>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="table process-data-table">
+              <thead>
+                <tr>
+                  ${visibleCols.map(col => {
+                    if (col.key === 'createdAt') {
+                      return `<th style="cursor:pointer" onclick="toggleSortOrder()">${col.label} ${sortOrder === 'desc' ? '▼' : '▲'}</th>`;
+                    }
+                    return `<th>${col.label}</th>`;
+                  }).join('')}
+                  <th class="col-actions">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${list.length ? list.map(row => `
+                  <tr>
+                    ${visibleCols.map(col => {
+                      if (col.key === 'code') {
+                        return `<td><a href="./process-detail.html?code=${encodeURIComponent(row.code)}">${escapeHtml(row.code)}</a></td>`;
+                      } else if (col.key === 'name') {
+                        return `<td>${escapeHtml(row.name)}</td>`;
+                      } else if (col.key === 'processType') {
+                        return `<td>${escapeHtml(row.processType || '流程工序')}</td>`;
+                      } else {
+                        return `<td>${escapeHtml(row[col.key] || '—')}</td>`;
+                      }
+                    }).join('')}
+                    <td class="col-actions">
+                      <button class="btn-text" onclick="location.href='./process-detail.html?code=${encodeURIComponent(row.code)}'">查看</button>
+                      <button class="btn-text" onclick="openProcessEditor('${escapeHtml(row.code)}')">编辑</button>
+                      <button class="btn-text danger" onclick="confirmDelete('${escapeHtml(row.code)}')">删除</button>
+                    </td>
+                  </tr>
+                `).join('') : `
+                  <tr><td colspan="${visibleCols.length + 1}"><div class="empty" style="padding:32px">暂无符合条件的工序数据</div></td></tr>
+                `}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="pagination-v2">
+            <span class="pagination-total">共 ${list.length} 条</span>
+            <select class="pagination-size"><option>100条/页</option><option>200条/页</option><option>300条/页</option><option>400条/页</option></select>
+            <button disabled>&laquo;</button><button disabled>&lsaquo;</button><button class="active">1</button><button>&rsaquo;</button><button>&raquo;</button>
+            <span class="pagination-jumper">跳至 <input type="number" min="1" value="1" /> 页</span>
+          </div>
+        </div>
+        </div>
+      `;
+      if (filterStageSelectInstance) filterStageSelectInstance.destroy();
+      setTimeout(() => {
+        filterStageSelectInstance = ProcessStageSelect.init({
+          rootId: 'filter-stage-search-select',
+          hiddenId: 'stage',
+          inputId: 'filter-stage-input',
+          dropdownId: 'filter-stage-dropdown',
+          loadingId: 'filter-stage-loading',
+          toggleId: 'filter-stage-toggle',
+          stages: getStages(),
+          value: filters.stage,
+          includeAll: true,
+          outsideEl: page
+        });
+      }, 0);
+    }
+
+    window.toggleSortOrder = function () {
+      sortOrder = sortOrder === 'desc' ? 'asc' : 'desc';
+      render();
+    };
+
+    window.openColumnConfig = function () {
+      let tempVisible = [...visibleColumns];
+      let draggedItem = null;
+      let columnFieldSearch = '';
+
+      function getFilteredColumns() {
+        const keyword = columnFieldSearch.trim();
+        if (!keyword) return allColumns;
+        const lower = keyword.toLowerCase();
+        return allColumns.filter(col =>
+          col.label.includes(keyword) ||
+          col.key.includes(keyword) ||
+          col.label.toLowerCase().includes(lower) ||
+          col.key.toLowerCase().includes(lower)
+        );
+      }
+
+      function renderColumnPickerItems() {
+        const filteredCols = getFilteredColumns();
+        return filteredCols.length ? filteredCols.map(col => `
+          <label>
+            <input type="checkbox" ${tempVisible.includes(col.key) ? 'checked' : ''} onchange="toggleColumn('${col.key}')" style="margin-right:8px;cursor:pointer" />
+            <span>${escapeHtml(col.label)}</span>
+          </label>
+        `).join('') : '<div class="column-picker-empty">未找到匹配字段</div>';
+      }
+
+      function updateColumnPickerPanel() {
+        const grid = document.querySelector('.column-picker-grid');
+        if (grid) grid.innerHTML = renderColumnPickerItems();
+      }
+
+      function bindColumnSearchInput() {
+        const input = document.querySelector('.column-config-search');
+        if (!input || input.dataset.bound === '1') return;
+        input.dataset.bound = '1';
+        let composing = false;
+        input.addEventListener('compositionstart', () => { composing = true; });
+        input.addEventListener('compositionend', (e) => {
+          composing = false;
+          columnFieldSearch = e.target.value;
+          updateColumnPickerPanel();
+        });
+        input.addEventListener('input', (e) => {
+          columnFieldSearch = e.target.value;
+          if (!composing) updateColumnPickerPanel();
+        });
+      }
+
+      const renderDialog = () => {
+        const selectedCols = allColumns.filter(c => tempVisible.includes(c.key));
+        return `
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;min-height:300px">
+            <div>
+              <div style="font-weight:600;margin-bottom:12px;font-size:14px">全部字段</div>
+              <div style="border:1px solid var(--border);border-radius:4px;padding:12px;background:var(--bg-soft)">
+                <input type="text" class="column-config-search" placeholder="搜索字段名称" value="${escapeHtml(columnFieldSearch)}" />
+                <div class="column-picker-grid">
+                  ${renderColumnPickerItems()}
+                </div>
+              </div>
+            </div>
+            <div>
+              <div style="font-weight:600;margin-bottom:12px;font-size:14px">列表显示字段</div>
+              <div id="sortable-list" style="border:1px solid var(--border);border-radius:4px;padding:12px;min-height:260px;background:var(--bg-soft)">
+                ${selectedCols.length ? selectedCols.map((col, idx) => `
+                  <div class="sortable-item" data-key="${col.key}" draggable="true" style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;margin-bottom:6px;background:#fff;border:1px solid var(--border);border-radius:4px;cursor:move;user-select:none">
+                    <div style="display:flex;align-items:center;gap:8px">
+                      <span style="color:var(--text-3);font-size:18px">☰</span>
+                      <span>${escapeHtml(col.label)}</span>
+                    </div>
+                    <button class="btn-text danger" onclick="removeColumn('${col.key}')" style="padding:2px 8px;font-size:20px;line-height:1">×</button>
+                  </div>
+                `).join('') : '<div style="color:var(--text-3);text-align:center;padding:40px 20px">请从左侧选择字段</div>'}
+              </div>
+            </div>
+          </div>
+        `;
+      };
+
+      window.toggleColumn = function(key) {
+        if (tempVisible.includes(key)) {
+          tempVisible = tempVisible.filter(k => k !== key);
+        } else {
+          tempVisible.push(key);
+        }
+        updateDialogContent();
+      };
+
+      window.removeColumn = function(key) {
+        tempVisible = tempVisible.filter(k => k !== key);
+        updateDialogContent();
+      };
+
+      const updateDialogContent = () => {
+        const searchInput = document.querySelector('.column-config-search');
+        if (searchInput) columnFieldSearch = searchInput.value;
+        const content = document.querySelector('.modal-body');
+        if (content) {
+          content.innerHTML = renderDialog();
+          initDragAndDrop();
+          bindColumnSearchInput();
+        }
+      };
+
+      const initDragAndDrop = () => {
+        const items = document.querySelectorAll('.sortable-item');
+        items.forEach(item => {
+          item.addEventListener('dragstart', (e) => {
+            draggedItem = item;
+            item.style.opacity = '0.5';
+          });
+          item.addEventListener('dragend', (e) => {
+            item.style.opacity = '1';
+            draggedItem = null;
+          });
+          item.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            if (draggedItem && draggedItem !== item) {
+              const list = item.parentNode;
+              const allItems = [...list.querySelectorAll('.sortable-item')];
+              const draggedIdx = allItems.indexOf(draggedItem);
+              const targetIdx = allItems.indexOf(item);
+              if (draggedIdx < targetIdx) {
+                item.after(draggedItem);
+              } else {
+                item.before(draggedItem);
+              }
+              // 更新tempVisible顺序
+              const newOrder = [...list.querySelectorAll('.sortable-item')].map(el => el.dataset.key);
+              tempVisible = newOrder;
+            }
+          });
+        });
+      };
+
+      confirmDialog(
+        '配置列表字段',
+        renderDialog(),
+        () => {
+          if (tempVisible.length === 0) {
+            toast('至少需要选择一个字段', 'error');
+            return false;
+          }
+          visibleColumns = tempVisible;
+          saveColumnConfig();
+          toast('列表字段配置已保存', 'success');
+          render();
+        },
+        '保存',
+        (mask) => {
+          const modal = mask.querySelector('.modal');
+          if (modal) modal.classList.add('modal-wide');
+          initDragAndDrop();
+          bindColumnSearchInput();
+        }
+      );
+    };
+
+    window.applyFilters = function () {
+      filters = {
+        stage: document.getElementById('stage').value,
+        code: document.getElementById('code').value,
+        name: document.getElementById('name').value,
+        processType: document.getElementById('processType').value,
+        createdAt: document.getElementById('createdAt').value
+      };
+      render();
+    };
+
+    window.resetFilters = function () {
+      filters = { stage: '', code: '', name: '', processType: '', createdAt: '' };
+      render();
+    };
+
+    window.exportList = function () {
+      toast('已导出工序管理列表', 'success');
+    };
+
+    function appendLog(code, log) {
+      processLogs[code] = processLogs[code] || [];
+      processLogs[code].unshift(log);
+      saveProcessLogs();
+    }
+
+    function collectDiff(oldRow, nextRow) {
+      const fields = [
+        { key: 'name', label: '工序名称' },
+        { key: 'stage', label: '工段' },
+        { key: 'processType', label: '工序类型' }
+      ];
+      return fields
+        .filter(f => oldRow[f.key] !== nextRow[f.key])
+        .map(f => ({
+          field: f.label,
+          old: f.format ? f.format(oldRow[f.key]) : oldRow[f.key],
+          new: f.format ? f.format(nextRow[f.key]) : nextRow[f.key]
+        }));
+    }
+
+    window.openProcessEditor = function (code) {
+      const editing = !!code;
+      const row = editing
+        ? processList.find(item => item.code === code)
+        : { code: '', name: '', stage: '', processType: '流程工序' };
+      if (!row) {
+        toast('未找到工序数据', 'error');
+        return;
+      }
+
+      const stages = getStages();
+      const processTypes = getProcessTypes();
+
+      function renderStageField() {
+        const rootId = editing ? 'edit-stage-search-select' : 'add-stage-search-select';
+        return ProcessStageSelect.render({
+          rootId,
+          hiddenId: 'form-stage',
+          inputId: 'form-stage-input',
+          dropdownId: 'form-stage-dropdown',
+          loadingId: 'form-stage-loading',
+          toggleId: 'form-stage-toggle',
+          value: row.stage
+        });
+      }
+
+      confirmDialog(
+        editing ? '编辑工序' : '新增工序',
+        `
+          <div class="form-row" style="grid-template-columns:1fr 1fr">
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 工段</label>
+              ${renderStageField()}
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 工序编号</label>
+              <input id="form-code" type="text" ${editing ? 'readonly' : ''} value="${escapeHtml(row.code)}" placeholder="如 PB" />
+              <div class="form-help">作为唯一标识，保存后不可变更</div>
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 工序名称</label>
+              <input id="form-name" type="text" value="${escapeHtml(row.name)}" placeholder="如 平板" />
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 工序类型</label>
+              <select id="form-processType">
+                ${processTypes.map(type => `<option value="${escapeHtml(type)}" ${(row.processType || '流程工序') === type ? 'selected' : ''}>${escapeHtml(type)}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+        `,
+        () => {
+          const next = {
+            code: document.getElementById('form-code').value.trim().toUpperCase(),
+            name: document.getElementById('form-name').value.trim(),
+            stage: document.getElementById('form-stage').value.trim(),
+            processType: document.getElementById('form-processType').value.trim()
+          };
+
+          if (!next.code || !next.name || !next.stage || !next.processType) {
+            toast('请填写所有必填字段', 'error');
+            return false;
+          }
+          if (!/^[A-Z0-9\-]+$/.test(next.code)) {
+            toast('工序编号仅支持大写字母、数字和连字符', 'error');
+            return false;
+          }
+
+          // 唯一性校验
+          const duplicateCode = processList.find(item => item.code === next.code && (!editing || item.code !== code));
+          if (duplicateCode) {
+            toast('工序编号已存在，请更换编号', 'error');
+            return false;
+          }
+          const duplicateName = processList.find(item => item.name === next.name && (!editing || item.code !== code));
+          if (duplicateName) {
+            toast('工序名称已存在，请更换名称', 'error');
+            return false;
+          }
+
+          const user = currentUser();
+          const time = nowText();
+          if (editing) {
+            const idx = processList.findIndex(item => item.code === code);
+            const oldRow = processList[idx];
+            const nextRow = { ...oldRow, ...next };
+            const diff = collectDiff(oldRow, nextRow);
+            if (diff.length) {
+              processList[idx] = { ...nextRow, updatedBy: user, updatedAt: time };
+              saveProcessList();
+              appendLog(code, { time, user, action: '编辑保存', type: 'edit', diff });
+            }
+            toast(diff.length ? '已保存工序修改' : '未发现字段变更', diff.length ? 'success' : 'warning');
+          } else {
+            const newRow = {
+              ...next,
+              creator: user,
+              createdAt: time,
+              updatedBy: user,
+              updatedAt: time
+            };
+            processList.unshift(newRow);
+            saveProcessList();
+            appendLog(next.code, { time, user, action: '创建', type: 'create' });
+            toast('已新增工序', 'success');
+          }
+          render();
+        },
+        editing ? '保存' : '新增',
+        (mask) => ProcessStageSelect.init({
+          rootId: editing ? 'edit-stage-search-select' : 'add-stage-search-select',
+          hiddenId: 'form-stage',
+          inputId: 'form-stage-input',
+          dropdownId: 'form-stage-dropdown',
+          loadingId: 'form-stage-loading',
+          toggleId: 'form-stage-toggle',
+          stages,
+          value: row.stage,
+          outsideEl: mask
+        })
+      );
+    };
+
+    window.confirmDelete = function (code) {
+      const row = processList.find(item => item.code === code);
+      if (!row) {
+        toast('未找到工序数据', 'error');
+        return;
+      }
+      confirmDialog('删除工序', `确定删除工序 <b>${escapeHtml(row.code)} - ${escapeHtml(row.name)}</b>？`, () => {
+        processList = processList.filter(item => item.code !== code);
+        saveProcessList();
+        appendLog(code, {
+          time: nowText(),
+          user: currentUser(),
+          action: '删除',
+          type: 'delete',
+          diff: [{ field: '工序', old: `${row.code} - ${row.name}`, new: '已删除' }]
+        });
+        toast('已删除工序', 'success');
+        render();
+      }, '删除');
+    };
+
+    render();
+  </script>
+</body>
+</html>

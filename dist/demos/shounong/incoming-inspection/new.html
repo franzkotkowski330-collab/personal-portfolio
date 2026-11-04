@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>新建来料检验 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+  <style>
+    .inspection-entry-table input,
+    .inspection-entry-table select {
+      width: 100%;
+      min-width: 130px;
+    }
+    .inspection-entry-table .standard {
+      color: var(--text-2);
+      line-height: 1.5;
+    }
+    .inspection-entry-table .source-select {
+      margin-bottom: 8px;
+    }
+    .basic-info-scroll {
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+    .basic-info-row {
+      display: grid;
+      grid-template-columns: 150px 190px 180px 120px 120px 140px 140px;
+      gap: 12px;
+      min-width: 1080px;
+      align-items: start;
+    }
+    .basic-info-row .form-label {
+      white-space: nowrap;
+    }
+    .field-meta { color: var(--text-3); font-size: 12px; font-weight: 400; }
+    .qc-option-meta { color: var(--text-3); font-size: 12px; margin-top: 4px; line-height: 1.5; }
+    .readonly-input { background: var(--bg-soft) !important; color: var(--text-2); }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const isEdit = params.get('edit') === '1';
+    const id = params.get('id');
+    const userName = localStorage.getItem('userName') || '王五';
+    const current = MOCK.incomingInspectionList.find(x => x.id === id) || null;
+    const data = current || {
+      id: '系统自动生成',
+      sampleTime: '2026-05-12 10:30',
+      batchNo: '',
+      shift: '白班',
+      team: '甲班',
+      fructoseConcentration: '',
+      fructoseContent: '',
+      odor: '无',
+      impurity: '无',
+      result: '合格',
+      sampler: '',
+      chemist: userName,
+      status: 'draft',
+      creator: userName,
+      createdAt: '保存后生成'
+    };
+
+    const qcFructoseOptions = [
+      { id: 'QC-20260512-0101', sampleTime: '2026-05-12 08:55', batchNo: 'F42-20260512-A01', value: '96.8', chemist: '王五' },
+      { id: 'QC-20260512-0098', sampleTime: '2026-05-12 07:50', batchNo: 'F42-20260512-A00', value: '95.9', chemist: '王五' },
+      { id: 'QC-20260511-0186', sampleTime: '2026-05-11 21:45', batchNo: 'F42-20260511-N05', value: '94.1', chemist: '马晓东' },
+      { id: 'QC-20260511-0182', sampleTime: '2026-05-11 19:18', batchNo: 'F42-20260511-D03', value: '97.2', chemist: '王五' }
+    ];
+
+    const page = renderLayout({
+      activeKey: 'incoming-inspection',
+      breadcrumb: [
+        { label: '业务工作' },
+        { label: '来料检验', href: './list.html' },
+        { label: isEdit ? '编辑' : '新建' }
+      ]
+    });
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, s => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[s]));
+    }
+
+    function toInputDateTime(value) {
+      return String(value || '').replace(' ', 'T');
+    }
+
+    function selected(value, expected) {
+      return value === expected ? 'selected' : '';
+    }
+
+    function selectedQcId() {
+      const matched = qcFructoseOptions.find(x => x.value === String(data.fructoseContent));
+      return matched ? matched.id : '';
+    }
+
+    function render() {
+      page.innerHTML = `
+        <div class="card">
+          <div class="card-header"><div class="card-title">基础信息</div></div>
+          <div class="basic-info-scroll">
+          <div class="form-row basic-info-row">
+            <div class="form-item">
+              <label class="form-label">记录编号 <span class="field-meta">系统自动生成</span></label>
+              <input class="readonly-input" type="text" value="${escapeHtml(data.id)}" readonly />
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 取样时间</label>
+              <input id="sampleTime" type="datetime-local" value="${escapeHtml(toInputDateTime(data.sampleTime))}" />
+              <div class="form-help">支持按分钟记录，列表可按时间范围查询。</div>
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 批次号</label>
+              <input id="batchNo" type="text" value="${escapeHtml(data.batchNo)}" placeholder="如 F42-20260512-A01" />
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 班次</label>
+              <select id="shift">
+                <option ${selected(data.shift, '白班')}>白班</option>
+                <option ${selected(data.shift, '夜班')}>夜班</option>
+              </select>
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 班组</label>
+              <select id="team">
+                <option ${selected(data.team, '甲班')}>甲班</option>
+                <option ${selected(data.team, '乙班')}>乙班</option>
+                <option ${selected(data.team, '丙班')}>丙班</option>
+              </select>
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 取样人</label>
+              <input id="sampler" type="text" value="${escapeHtml(data.sampler)}" placeholder="请输入取样人" />
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 化验员</label>
+              <input id="chemist" type="text" value="${escapeHtml(data.chemist)}" />
+              <div class="form-help">默认当前填写用户，可编辑。</div>
+            </div>
+          </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">检验项目</div>
+            <span id="resultTag">${data.result === '合格' ? '<span class="tag tag-green">合格</span>' : '<span class="tag tag-red">不合格</span>'}</span>
+          </div>
+          <div class="table-wrap inspection-entry-table">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th style="width:160px">检验项目</th>
+                  <th>检验标准</th>
+                  <th style="width:90px">单位</th>
+                  <th style="width:300px">测定值</th>
+                  <th style="width:130px">检验结果</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="required">*</span> <b>果糖浓度</b></td>
+                  <td><div class="standard">40.0 - 45.0</div></td>
+                  <td>%</td>
+                  <td>
+                    <input id="fructoseConcentration" type="number" step="0.1" value="${escapeHtml(data.fructoseConcentration)}" placeholder="请输入果糖浓度" oninput="updateJudgement()" />
+                  </td>
+                  <td id="judgeConcentration">—</td>
+                </tr>
+                <tr>
+                  <td><span class="required">*</span> <b>果糖含量</b></td>
+                  <td>
+                    <div class="standard">≥ 95.0</div>
+                    <div class="qc-option-meta">从质检科"果糖来料"检验数据选择。</div>
+                  </td>
+                  <td>%</td>
+                  <td>
+                    <select id="qcResult" class="source-select" onchange="pickQcResult()">
+                      <option value="">请选择质检科检验数据</option>
+                      ${qcFructoseOptions.map(opt => `
+                        <option value="${opt.id}" ${selected(selectedQcId(), opt.id)}>
+                          ${opt.batchNo} · ${opt.value}% · ${opt.sampleTime}
+                        </option>
+                      `).join('')}
+                    </select>
+                    <input id="fructoseContent" class="readonly-input" type="number" step="0.01" value="${escapeHtml(data.fructoseContent)}" placeholder="由质检科检验数据带入" readonly />
+                    <div id="qcMeta" class="qc-option-meta">选择后自动带入测定值，保存时进入操作记录。</div>
+                  </td>
+                  <td id="judgeContent">—</td>
+                </tr>
+                <tr>
+                  <td><span class="required">*</span> <b>有无异味</b></td>
+                  <td><div class="standard">无异味</div></td>
+                  <td>—</td>
+                  <td>
+                    <select id="odor" onchange="updateJudgement()">
+                      <option ${selected(data.odor, '无')}>无</option>
+                      <option ${selected(data.odor, '有')}>有</option>
+                    </select>
+                  </td>
+                  <td id="judgeOdor">—</td>
+                </tr>
+                <tr>
+                  <td><span class="required">*</span> <b>有无杂质</b></td>
+                  <td><div class="standard">无杂质</div></td>
+                  <td>—</td>
+                  <td>
+                    <select id="impurity" onchange="updateJudgement()">
+                      <option ${selected(data.impurity, '无')}>无</option>
+                      <option ${selected(data.impurity, '有')}>有</option>
+                    </select>
+                  </td>
+                  <td id="judgeImpurity">—</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><div class="card-title">备注</div></div>
+          <textarea id="remark" placeholder="本次来料检验的补充说明..."></textarea>
+        </div>
+
+        <div class="text-center" style="padding:8px 0 24px">
+          <button class="btn" onclick="history.back()">取消</button>
+          <button class="btn" onclick="onSave('draft')">保存草稿</button>
+          <button class="btn btn-primary" onclick="onSave('submit')">正式提交</button>
+        </div>
+      `;
+      updateJudgement();
+      pickQcResult(false);
+    }
+
+    function setJudge(id, pass, text) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.innerHTML = pass
+        ? `<span class="tag tag-green">合格</span><div class="form-help success">${text}</div>`
+        : `<span class="tag tag-red">不合格</span><div class="form-help warning">${text}</div>`;
+    }
+
+    window.pickQcResult = function (needJudge = true) {
+      const id = document.getElementById('qcResult').value;
+      const opt = qcFructoseOptions.find(x => x.id === id);
+      if (opt) {
+        document.getElementById('fructoseContent').value = opt.value;
+        document.getElementById('qcMeta').innerHTML = `已选择 <b>${opt.id}</b>，化验员 ${opt.chemist}，取样时间 ${opt.sampleTime}`;
+      } else {
+        document.getElementById('qcMeta').textContent = '从质检科"果糖来料"检验数据选择，保存时进入操作记录。';
+      }
+      if (needJudge) updateJudgement();
+    };
+
+    window.updateJudgement = function () {
+      const concentration = parseFloat(document.getElementById('fructoseConcentration').value);
+      const content = parseFloat(document.getElementById('fructoseContent').value);
+      const odor = document.getElementById('odor').value;
+      const impurity = document.getElementById('impurity').value;
+
+      const concentrationPass = !isNaN(concentration) && concentration >= 40 && concentration <= 45;
+      const contentPass = !isNaN(content) && content >= 95;
+      const odorPass = odor === '无';
+      const impurityPass = impurity === '无';
+      const pass = concentrationPass && contentPass && odorPass && impurityPass;
+
+      setJudge('judgeConcentration', concentrationPass, isNaN(concentration) ? '待录入' : (concentrationPass ? '在规格范围内' : '超出 40.0% - 45.0% 范围'));
+      setJudge('judgeContent', contentPass, isNaN(content) ? '待选择质检科检验数据' : (contentPass ? '果糖含量达标' : '果糖含量低于 95.0%'));
+      setJudge('judgeOdor', odorPass, odorPass ? '无异味' : '存在异味，系统判定不合格');
+      setJudge('judgeImpurity', impurityPass, impurityPass ? '无杂质' : '存在杂质，系统判定不合格');
+
+      document.getElementById('resultTag').innerHTML = pass
+        ? '<span class="tag tag-green">测定结果：合格</span>'
+        : '<span class="tag tag-red">测定结果：不合格</span>';
+      return pass ? '合格' : '不合格';
+    };
+
+    function collectForm(mode) {
+      return {
+        sampleTime: document.getElementById('sampleTime').value,
+        batchNo: document.getElementById('batchNo').value.trim(),
+        shift: document.getElementById('shift').value,
+        team: document.getElementById('team').value,
+        fructoseConcentration: document.getElementById('fructoseConcentration').value,
+        fructoseContent: document.getElementById('fructoseContent').value,
+        odor: document.getElementById('odor').value,
+        impurity: document.getElementById('impurity').value,
+        sampler: document.getElementById('sampler').value.trim(),
+        chemist: document.getElementById('chemist').value.trim(),
+        status: mode === 'draft' ? 'draft' : 'submitted',
+        creator: data.creator || userName,
+        createdAt: data.createdAt || '保存后生成',
+        result: updateJudgement()
+      };
+    }
+
+    window.onSave = function (mode) {
+      const form = collectForm(mode);
+      if (!form.sampleTime || !form.batchNo || !form.fructoseConcentration || !form.fructoseContent || !form.sampler || !form.chemist) {
+        toast('请完善必填项：取样时间、批次号、浓度、果糖含量、取样人、化验员', 'warning');
+        return;
+      }
+      if (mode === 'draft') {
+        toast(`草稿已保存，当前测定结果：${form.result}`, 'success');
+        return;
+      }
+      toast(`来料检验已提交，测定结果：${form.result}`, form.result === '合格' ? 'success' : 'warning');
+      setTimeout(() => location.href = './list.html', 800);
+    };
+
+    render();
+  </script>
+</body>
+</html>

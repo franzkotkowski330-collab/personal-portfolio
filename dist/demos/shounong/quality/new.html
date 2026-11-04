@@ -1,0 +1,939 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>新建质检单 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+  <style>
+    .opt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
+    .opt-item {
+      padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px;
+      cursor: pointer; transition: all 0.15s;
+      display: flex; align-items: center; gap: 8px; font-size: 13px;
+      background: #fff;
+    }
+    .opt-item:hover { border-color: var(--primary); color: var(--primary); }
+    .opt-item.selected { background: var(--primary-light); border-color: var(--primary); color: var(--primary); font-weight: 500; }
+    .device-options { display: flex; gap: 8px; flex-wrap: wrap; }
+    .device-options .opt-item { padding: 6px 12px; }
+    .record-card {
+      border: 1px solid var(--border); border-radius: 8px; padding: 16px;
+      margin-bottom: 14px; background: var(--bg-soft);
+      position: relative;
+    }
+    .record-card-head {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
+      padding-bottom: 10px; border-bottom: 1px solid var(--border);
+      font-weight: 600;
+    }
+    .record-card-head .idx {
+      width: 22px; height: 22px; border-radius: 50%;
+      background: var(--primary); color: #fff; display: inline-flex;
+      align-items: center; justify-content: center; font-size: 12px;
+    }
+    .record-card-head .summary {
+      margin-left: auto; font-weight: 400; font-size: 12.5px; color: var(--text-3);
+    }
+    .record-card .remove {
+      cursor: pointer; color: var(--danger); font-size: 18px; line-height: 1;
+    }
+    .add-record-btn {
+      width: 100%; padding: 14px; border: 1px dashed var(--primary);
+      background: #fff; color: var(--primary); border-radius: 8px;
+      font-size: 14px; font-weight: 500; cursor: pointer;
+      transition: all 0.15s;
+    }
+    .add-record-btn:hover { background: var(--primary-light); }
+    .field-block {
+      background: #fff; padding: 12px 14px; border-radius: 6px;
+      border: 1px solid var(--border);
+      margin-bottom: 12px;
+    }
+    .field-block-title {
+      font-size: 13px; font-weight: 600; color: var(--text-2);
+      margin-bottom: 10px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .field-block-title::before {
+      content: ''; width: 3px; height: 14px; background: var(--primary); border-radius: 2px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const type = params.get('type') || 'im1';
+    const isEdit = params.get('edit') === '1';
+    const id = params.get('id');
+    const cfg = MOCK.qualityFormConfig[type];
+
+    const TYPE_KEY_MAP = {
+      fermentation: 'quality-list',
+      im1: 'quality-list-im1',
+      im2: 'quality-list-im2',
+      qc: 'quality-list-qc'
+    };
+
+    // 不同类型需要展示的字段配置
+    const TYPE_FEATURES = {
+      fermentation: { needRound: true, deviceLabel: '取样设备', deviceRequired: true },
+      im1: { needRound: false, deviceLabel: '取样点', deviceRequired: false }, // 部分工序无取样点
+      im2: { needRound: false, deviceLabel: '取样点', deviceRequired: false },
+      qc: { needRound: false, deviceLabel: '取样点', deviceRequired: false }
+    };
+    const features = TYPE_FEATURES[type];
+
+    const isIntermediate = type === 'im1' || type === 'im2';
+    const isQcBatch = type === 'qc';
+    const imDivisionEnums = [...new Set((MOCK.inspectionFormImDivision || []).map(d => d.division))].filter(Boolean);
+    // 中间体检验（im1）入口需同时可选「中间体 1」「中间体 2」；im2 入口仅中间体 2
+    const intermediateDivisionOptions = type === 'im1'
+      ? ['中间体 1', '中间体 2'].filter(d => imDivisionEnums.includes(d))
+      : type === 'im2'
+        ? imDivisionEnums.filter(d => d === '中间体 2')
+        : imDivisionEnums;
+
+    const page = renderLayout({
+      activeKey: TYPE_KEY_MAP[type],
+      breadcrumb: [
+        { label: '业务工作' }, { label: '工序检验' },
+        { label: cfg.label, href: `./list.html?type=${type}` },
+        { label: isEdit ? '编辑' : '新建' }
+      ]
+    });
+
+    /**
+     * 非中间体：records 数组，每项 { processName, deviceName, round, items }
+     * 中间体（im1/im2）：division、selectedProcesses、measured[id]、itemResult[id]
+     */
+    const state = isIntermediate ? {
+      division: intermediateDivisionOptions[0] || (type === 'im1' ? '中间体 1' : '中间体 2'),
+      selectedProcesses: [],
+      measured: {},
+      itemResult: {},
+      /** 中间体检验（im1）检验明细：按工序合并行时的取样设备（非必填），key 为工序名称 */
+      sampleDeviceByProcess: {},
+      baseDate: '2026-05-07',
+      baseShift: '白班',
+      baseTeam: '甲班',
+      baseSampleTime: '2026-05-07T09:30'
+    } : isQcBatch ? {
+      detailEntries: [{ processName: '', inspectTime: '', sampleTime: '' }],
+      measured: {},
+      itemResult: {},
+      sampleDeviceByProcess: {},
+      baseShift: '白班',
+      baseTeam: '甲班'
+    } : {
+      records: [{ processName: '', deviceName: '', round: '', items: {} }]
+    };
+
+    function processesForDivision(division) {
+      const divs = MOCK.inspectionFormImDivision || [];
+      return [...new Set(divs.filter(d => d.division === division).map(d => d.process))];
+    }
+
+    function getImFormRows() {
+      const rows = (MOCK.inspectionFormConfigs && MOCK.inspectionFormConfigs.IM) ? MOCK.inspectionFormConfigs.IM : [];
+      return rows.filter(r => r.enabled !== false);
+    }
+    function getQcFormRows() {
+      const rows = (MOCK.inspectionFormConfigs && MOCK.inspectionFormConfigs.QC) ? MOCK.inspectionFormConfigs.QC : [];
+      return rows.filter(r => r.enabled !== false);
+    }
+
+    function standardTextIm(row) {
+      if (row.dataType === '布尔型') {
+        return (row.standard || '—') + (row.passValue != null && row.passValue !== '' ? '（标准为「' + row.passValue + '」）' : '');
+      }
+      const hasMin = row.specMin && row.specMin !== '—';
+      const hasMax = row.specMax && row.specMax !== '—';
+      const parts = [];
+      if (hasMin) parts.push('≥ ' + row.specMin);
+      if (hasMax) parts.push('≤ ' + row.specMax);
+      const range = parts.length ? parts.join('，') : '—';
+      const u = (row.unit && row.unit !== '—') ? String(row.unit) : '';
+      const tail = row.standard ? '（' + row.standard + '）' : '';
+      const head = (range === '—' && !u) ? '—' : range + (u ? ' ' + u : '');
+      return head + tail;
+    }
+
+    function imDetailRows() {
+      const out = [];
+      const formRows = getImFormRows();
+      state.selectedProcesses.forEach(procName => {
+        formRows.filter(r => r.process === procName).forEach(r => out.push(r));
+      });
+      return out;
+    }
+    function qcDetailRows() {
+      const out = [];
+      const formRows = getQcFormRows();
+      (state.detailEntries || []).forEach((entry, entryIdx) => {
+        if (!entry || !entry.processName) return;
+        formRows.filter(r => r.process === entry.processName).forEach(r => out.push({
+          ...r,
+          _rowKey: entryIdx + '::' + r.id,
+          _entryIdx: entryIdx,
+          _processName: entry.processName
+        }));
+      });
+      return out;
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+    function escapeHtmlAttr(s) {
+      return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    /** 【设备管理】中关联工序的设备名称；工序名与主数据不完全一致时做少量别名匹配 */
+    function deviceMgmtProcessMatch(procName, dProcess) {
+      if (dProcess === procName) return true;
+      if (procName === '阿糖异构' && dProcess === '异构') return true;
+      return false;
+    }
+
+    function getDeviceNamesFromManagementForProcess(procName) {
+      const list = MOCK.deviceManagementList || [];
+      const names = list
+        .filter(d => d.enabled !== false && deviceMgmtProcessMatch(procName, d.process))
+        .map(d => d.name);
+      return [...new Set(names)].sort((a, b) => String(a).localeCompare(String(b), 'zh-Hans-CN'));
+    }
+
+    function renderImDetailRowCells(row) {
+      const mid = row._rowKey || row.id;
+      const meas = state.measured[mid] != null ? String(state.measured[mid]) : '';
+      const res = state.itemResult[mid] || '';
+      let inputCell = '';
+      if (row.dataType === '布尔型') {
+        inputCell = '<select id="meas-' + mid + '" onchange=\'imSetMeasured(' + JSON.stringify(mid) + ', this.value)\'>' +
+          '<option value="">请选择</option>' +
+          '<option value="是"' + (meas === '是' ? ' selected' : '') + '>是</option>' +
+          '<option value="否"' + (meas === '否' ? ' selected' : '') + '>否</option>' +
+          '</select>';
+      } else {
+        inputCell = '<input id="meas-' + mid + '" type="' + (row.dataType === '数值型' ? 'number' : 'text') + '" value="' + meas.replace(/"/g, '&quot;') + '" placeholder="测定值" oninput=\'imSetMeasured(' + JSON.stringify(mid) + ', this.value)\' />';
+      }
+      return '<td><b>' + row.item + '</b></td>' +
+        '<td style="font-size:12.5px;color:var(--text-2);max-width:300px;word-break:break-word">' + standardTextIm(row) + '</td>' +
+        '<td style="min-width:140px">' + inputCell + '</td>' +
+        '<td style="min-width:118px">' +
+        '<select onchange=\'imSetResult(' + JSON.stringify(mid) + ', this.value)\'>' +
+        '<option value="">请选择</option>' +
+        '<option value="合格"' + (res === '合格' ? ' selected' : '') + '>合格</option>' +
+        '<option value="不合格"' + (res === '不合格' ? ' selected' : '') + '>不合格</option>' +
+        '</select></td>';
+    }
+
+    function renderSampleDeviceSelect(procName, rowspan) {
+      const opts = getDeviceNamesFromManagementForProcess(procName);
+      const sel = state.sampleDeviceByProcess[procName] || '';
+      const procAttr = escapeHtmlAttr(procName);
+      let body = '<option value="">请选择（非必填）</option>';
+      opts.forEach(n => {
+        body += '<option value="' + escapeHtmlAttr(n) + '"' + (sel === n ? ' selected' : '') + '>' + escapeHtmlAttr(n) + '</option>';
+      });
+      const hint = !opts.length
+        ? '<div class="text-3" style="font-size:11px;margin-top:6px;max-width:160px">该工序在【设备管理】中暂无关联设备，可不选</div>'
+        : '';
+      return '<select style="width:100%;min-width:132px" data-proc="' + procAttr + '" onchange="imSetSampleDevice(this.dataset.proc, this.value)" ' +
+        'title="选项来自【设备管理】中关联本工序的设备">' + body + '</select>' + hint;
+    }
+
+    function renderQcTimeInput(entryIdx, field) {
+      const entry = (state.detailEntries || [])[entryIdx] || {};
+      const val = entry[field] || '';
+      const label = field === 'inspectTime' ? '检验时间' : '取样时间';
+      return '<input type="datetime-local" value="' + escapeHtmlAttr(val) + '" ' +
+        'onchange="qcSetEntryTime(' + entryIdx + ', \'' + field + '\', this.value)" ' +
+        'placeholder="请选择' + label + '" />';
+    }
+
+    function renderImDetailRowsHtml() {
+      if (isQcBatch) {
+        const entries = state.detailEntries || [];
+        if (!entries.length) {
+          return '<tr><td colspan="8" class="text-3" style="text-align:center;padding:20px">请点击“新增行”开始录入。</td></tr>';
+        }
+        const formRows = getQcFormRows();
+        let html = '';
+        entries.forEach((entry, entryIdx) => {
+          const proc = entry.processName || '';
+          const procRows = proc ? formRows.filter(r => r.process === proc).map(r => ({
+            ...r,
+            _rowKey: entryIdx + '::' + r.id,
+            _entryIdx: entryIdx,
+            _processName: proc
+          })) : [];
+          if (!procRows.length) {
+            html += '<tr>' +
+              '<td>' + renderQcProcessSelect(entryIdx, proc) + '</td>' +
+              '<td>' + (proc ? renderSampleDeviceSelect(proc, 1) : '—') + '</td>' +
+              '<td>' + renderQcTimeInput(entryIdx, 'inspectTime') + '</td>' +
+              '<td>' + renderQcTimeInput(entryIdx, 'sampleTime') + '</td>' +
+              '<td class="text-3">—</td><td class="text-3">—</td><td class="text-3">—</td><td class="text-3">—</td>' +
+              '</tr>';
+            return;
+          }
+          const rowspan = procRows.length;
+          const lead = '<td rowspan="' + rowspan + '" style="vertical-align:middle;min-width:180px">' +
+              renderQcProcessSelect(entryIdx, proc) +
+            '</td>' +
+            '<td rowspan="' + rowspan + '" style="vertical-align:middle">' + renderSampleDeviceSelect(proc, rowspan) + '</td>' +
+            '<td rowspan="' + rowspan + '" style="vertical-align:middle;min-width:165px">' + renderQcTimeInput(entryIdx, 'inspectTime') + '</td>' +
+            '<td rowspan="' + rowspan + '" style="vertical-align:middle;min-width:165px">' + renderQcTimeInput(entryIdx, 'sampleTime') + '</td>';
+          procRows.forEach((row, idx) => {
+            html += '<tr>' + (idx === 0 ? lead : '') + renderImDetailRowCells(row) + '</tr>';
+          });
+        });
+        return html;
+      }
+      const rows = isQcBatch ? qcDetailRows() : imDetailRows();
+      const useMergedProcess = type === 'im1' || type === 'qc';
+      const colSpanEmpty = useMergedProcess ? 6 : 5;
+      if (!rows.length) {
+        return '<tr><td colspan="' + colSpanEmpty + '" class="text-3" style="text-align:center;padding:20px">' +
+          (isQcBatch
+            ? '请点击下方“新增行”，并在明细中选择工序后自动带出检验项目。'
+            : '请在上方<b>多选</b>检验工序；选中后，此处按工序展开检验明细（工序、检验项目、检验标准来自【检验表单配置】─ 中间体）'
+          ) +
+          '</td></tr>';
+      }
+      if (!useMergedProcess) {
+        return rows.map(row =>
+          '<tr><td>' + row.process + '</td>' + renderImDetailRowCells(row) + '</tr>'
+        ).join('');
+      }
+      let html = '';
+      let i = 0;
+      while (i < rows.length) {
+        const proc = rows[i].process;
+        let j = i + 1;
+        if (isQcBatch) {
+          while (j < rows.length && rows[j]._entryIdx === rows[i]._entryIdx) j++;
+        } else {
+          while (j < rows.length && rows[j].process === proc) j++;
+        }
+        const rowspan = j - i;
+        const lead = isQcBatch
+          ? '<td rowspan="' + rowspan + '" style="vertical-align:middle;min-width:180px">' +
+              renderQcProcessSelect(rows[i]._entryIdx, rows[i]._processName) +
+            '</td>' +
+            '<td rowspan="' + rowspan + '" style="vertical-align:middle">' + renderSampleDeviceSelect(rows[i]._processName, rowspan) + '</td>'
+          : '<td rowspan="' + rowspan + '" style="vertical-align:middle;white-space:nowrap">' + escapeHtml(proc) + '</td>' +
+            '<td rowspan="' + rowspan + '" style="vertical-align:middle">' + renderSampleDeviceSelect(proc, rowspan) + '</td>';
+        for (let k = i; k < j; k++) {
+          html += '<tr>' + (k === i ? lead : '') + renderImDetailRowCells(rows[k]) + '</tr>';
+        }
+        i = j;
+      }
+      return html;
+    }
+
+    function renderQcProcessSelect(entryIdx, processName) {
+      const opts = (cfg.processes || []).map(p => p.name);
+      let html = '<div style="display:flex;gap:6px;align-items:center">';
+      html += '<select style="min-width:120px" onchange="qcSetEntryProcess(' + entryIdx + ', this.value)">';
+      html += '<option value="">请选择工序</option>';
+      opts.forEach(n => {
+        html += '<option value="' + escapeHtmlAttr(n) + '"' + (n === processName ? ' selected' : '') + '>' + escapeHtml(n) + '</option>';
+      });
+      html += '</select>';
+      html += '<button type="button" class="btn btn-sm" onclick="qcRemoveEntry(' + entryIdx + ')">删除行</button>';
+      html += '</div>';
+      return html;
+    }
+
+    // ========== 数据辅助 ==========
+    // 根据工序+设备 获取检验项目（兼容4种类型）
+    function getItemsForProcess(proc, deviceName) {
+      if (!proc) return [];
+      // 发酵工段、中间体检验（im1）：cfg.items 统一
+      if (cfg.items) return cfg.items;
+      // 中间体2/质检科：itemsByDevice 优先（A97色谱进水/进料）
+      if (proc.itemsByDevice && deviceName && proc.itemsByDevice[deviceName]) {
+        return proc.itemsByDevice[deviceName].map(name => ({
+          name,
+          ...(cfg.itemsMeta?.[name] || { dataType: '数值型', unit: '', specMin: '—', specMax: '—', desc: '', required: false })
+        }));
+      }
+      if (proc.items) {
+        return proc.items.map(name => ({
+          name,
+          ...(cfg.itemsMeta?.[name] || { dataType: '数值型', unit: '', specMin: '—', specMax: '—', desc: '', required: false })
+        }));
+      }
+      return [];
+    }
+
+    // 提示：某条记录是否能展示检验项（要求工序选好，且若有取样点必须选好）
+    function isReadyToShowItems(record) {
+      if (!record.processName) return false;
+      const proc = cfg.processes.find(p => p.name === record.processName);
+      if (!proc) return false;
+      if (proc.devices && proc.devices.length > 0 && !record.deviceName) return false;
+      return true;
+    }
+
+    // 单条记录的简要描述（卡片右上角显示）
+    function summaryOf(record) {
+      const parts = [];
+      if (record.processName) parts.push(record.processName);
+      if (record.deviceName) parts.push(record.deviceName);
+      if (record.round) parts.push(record.round);
+      return parts.length ? parts.join(' · ') : '尚未选择';
+    }
+
+    // ========== 渲染 ==========
+    function render() {
+      const userName = localStorage.getItem('userName') || '张三';
+      const introMap = {
+        fermentation: '发酵工段质检：每条 = 1 工序 + 1 设备 + 1 检验次序，可一次提交多条不同检验',
+        im1: '选择「检验工序分组」后多选检验工序；下方「检验明细列表」带出配置项。列表「取样时间」与本页「取样时间」一致。',
+        im2: '选择「检验工序分组」后多选检验工序；下方「检验明细列表」带出配置项（中间体 2 工序集）。',
+        qc: '质检科检验：按当天班次新增检验记录，可一次添加多条不同工序/取样点的检验记录批量提交'
+      };
+
+      if (isIntermediate || isQcBatch) {
+        const procList = processesForDivision(state.division);
+        const procOpts = procList.map(p => `
+            <div class="opt-item ${state.selectedProcesses.includes(p) ? 'selected' : ''}"
+                 onclick='toggleImProcess(${JSON.stringify(p)})'>
+              <span style="flex:1">${p}</span>
+              ${state.selectedProcesses.includes(p) ? '<span style="color:var(--primary)">✓</span>' : ''}
+            </div>`).join('');
+        const divOpts = intermediateDivisionOptions.map(d => `
+            <option value="${d}" ${state.division === d ? 'selected' : ''}>${d}</option>`).join('');
+
+        page.innerHTML = `
+
+        <div class="card">
+          <div class="card-header"><div class="card-title">基础信息</div></div>
+          <div class="form-row">
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 班次</label>
+              <select onchange="imBase('shift', this.value)">
+                <option value="白班" ${state.baseShift === '白班' ? 'selected' : ''}>白班</option>
+                <option value="夜班" ${state.baseShift === '夜班' ? 'selected' : ''}>夜班</option>
+              </select>
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 班组</label>
+              <select onchange="imBase('team', this.value)">
+                <option value="甲班" ${state.baseTeam === '甲班' ? 'selected' : ''}>甲班</option>
+                <option value="乙班" ${state.baseTeam === '乙班' ? 'selected' : ''}>乙班</option>
+                <option value="丙班" ${state.baseTeam === '丙班' ? 'selected' : ''}>丙班</option>
+              </select>
+            </div>
+            <div class="form-item">
+              <label class="form-label">检验人</label>
+              <input type="text" value="${userName}" readonly />
+            </div>
+            ${!isQcBatch ? `<div class="form-item">
+              <label class="form-label"><span class="required">*</span> 取样时间</label>
+              <input type="datetime-local" id="base-sampleTime" value="${state.baseSampleTime}" onchange="imBase('sampleTime', this.value)" />
+            </div>` : ''}
+            ${isIntermediate ? `<div class="form-item">
+              <label class="form-label"><span class="required">*</span> 检验工序分组</label>
+              <select id="base-division" onchange="onImDivisionChange(this.value)">${divOpts}</select>
+            </div>` : ''}
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              检验记录列表
+              <span class="text-3" style="font-weight:400;font-size:12px">
+                ${isQcBatch ? `· 已新增 ${(state.detailEntries || []).length} 行 · 检验明细 ${qcDetailRows().length} 行` : `· 已选 ${state.selectedProcesses.length} 个工序 · 检验明细 ${imDetailRows().length} 行`}
+              </span>
+            </div>
+          </div>
+          <div class="text-3" style="font-size:12.5px;line-height:1.7;background:var(--info-light);padding:10px 12px;border-radius:6px;margin-bottom:14px">
+            ${isQcBatch
+              ? '💡 在下方「检验明细列表」点击“新增行”，然后逐行选择工序，系统会自动带出该工序关联检验项目。<br/>🔧 <b>质检科检验：</b>相同工序的多行检验项目，「工序」与「取样设备」合并显示；取样设备非必填，选项来自【设备管理】中关联该工序的设备。'
+              : `💡 先确认「检验工序分组」，再在下方<b>多选</b>本组内的检验工序；选中工序后，底部「检验明细列表」按工序展开检验项目与检验标准。<br/>
+            ${type === 'im1' ? '🔧 <b>中间体检验：</b>相同工序的多行检验项目，「工序」与「取样设备」合并显示；取样设备非必填，选项来自【设备管理】中关联该工序的设备。<br/>' : ''}
+            ⚠ 分组枚举与工序范围与【检验表单配置】─ 中间体中的「检验工序分组」维护数据一致。`}
+          </div>
+
+          ${!isQcBatch ? `<div class="field-block">
+            <div class="field-block-title">
+              <span class="required">*</span> 检验工序（多选）
+              <span class="text-3" style="font-weight:400;font-size:12px;margin-left:6px">（当前分组「${state.division}」共 ${procList.length} 个工序）</span>
+            </div>
+            <div class="opt-grid">${procOpts || '<div class="text-3" style="padding:12px">当前分组下暂无工序配置</div>'}</div>
+          </div>` : ''}
+
+          <div class="field-block" style="margin-top:14px">
+            <div class="field-block-title">检验明细列表</div>
+            ${isQcBatch ? `<div style="margin-bottom:10px"><button type="button" class="btn btn-primary" onclick="qcAddEntry()">+ 新增行</button></div>` : ''}
+            <div class="table-wrap">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="min-width:120px">工序</th>
+                    ${(type === 'im1' || type === 'qc') ? '<th style="min-width:150px">取样设备</th>' : ''}
+                    ${type === 'qc' ? '<th style="min-width:160px">检验时间</th>' : ''}
+                    ${type === 'qc' ? '<th style="min-width:160px">取样时间</th>' : ''}
+                    <th style="min-width:100px">检验项目</th>
+                    <th>检验标准</th>
+                    <th style="min-width:140px">测定值</th>
+                    <th style="min-width:118px">检验结果</th>
+                  </tr>
+                </thead>
+                <tbody>${renderImDetailRowsHtml()}</tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><div class="card-title">备注</div></div>
+          <textarea placeholder="本次检验的补充说明..."></textarea>
+        </div>
+
+        <div class="text-center" style="padding:8px 0 24px">
+          <button class="btn" onclick="history.back()">取消</button>
+          <button class="btn" onclick="onSave('draft')">保存草稿</button>
+          <button class="btn btn-primary" onclick="onSave('submit')">正式提交</button>
+        </div>`;
+        return;
+      }
+
+      page.innerHTML = `
+
+        <div class="card">
+          <div class="card-header"><div class="card-title">基础信息（本次提交所有记录共享）</div></div>
+          <div class="form-row">
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 检验日期</label>
+              <input type="date" value="2026-05-07" />
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 班次</label>
+              <select><option>白班</option><option>夜班</option></select>
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 班组</label>
+              <select><option>甲班</option><option>乙班</option><option>丙班</option></select>
+            </div>
+            <div class="form-item">
+              <label class="form-label">检验人</label>
+              <input type="text" value="${userName}" readonly />
+            </div>
+            <div class="form-item">
+              <label class="form-label">${type === 'fermentation' ? '取样起始时间' : '取样时间'}</label>
+              <input type="datetime-local" value="2026-05-07T09:30" />
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              检验记录列表
+              <span class="text-3" style="font-weight:400;font-size:12px">
+                · 共 ${state.records.length} 条 · ${type === 'fermentation' ? '每条 = 工序+设备+检验次序' : '每条 = 工序+(取样点)'}
+              </span>
+            </div>
+          </div>
+          <div class="text-3" style="font-size:12.5px;line-height:1.7;background:var(--info-light);padding:10px 12px;border-radius:6px;margin-bottom:14px">
+            💡 <b>批量录入说明：</b>同一班次内可一次性提交多条不同工序的检验记录。每条记录在系统中独立存储，便于按"工序-取样点${type === 'fermentation' ? '-次序' : ''}"维度追溯。<br/>
+            ⚠ <b>不允许重复：</b>同一班次同一工序同一${features.deviceLabel || '取样'}${type === 'fermentation' ? '同一检验次序' : ''}不可重复录入。
+          </div>
+
+          <div id="records-container">
+            ${state.records.map((r, idx) => renderRecordCard(r, idx)).join('')}
+          </div>
+
+          <button class="add-record-btn" onclick="addRecord()">
+            ＋ 添加一条检验记录
+          </button>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><div class="card-title">备注</div></div>
+          <textarea placeholder="本次检验的补充说明..."></textarea>
+        </div>
+
+        <div class="text-center" style="padding:8px 0 24px">
+          <button class="btn" onclick="history.back()">取消</button>
+          <button class="btn" onclick="onSave('draft')">保存草稿</button>
+          <button class="btn btn-primary" onclick="onSave('submit')">正式提交</button>
+        </div>
+      `;
+    }
+
+    function renderRecordCard(record, idx) {
+      const proc = cfg.processes.find(p => p.name === record.processName);
+      const devices = proc ? proc.devices || [] : [];
+      const items = getItemsForProcess(proc, record.deviceName);
+      const showItems = isReadyToShowItems(record);
+
+      return `
+        <div class="record-card" data-idx="${idx}">
+          <div class="record-card-head">
+            <span class="idx">${idx + 1}</span>
+            <span>第 ${idx + 1} 条记录</span>
+            <span class="summary">${summaryOf(record)}</span>
+            ${state.records.length > 1 ? `<span class="remove" onclick="removeRecord(${idx})" title="删除此条">✕</span>` : ''}
+          </div>
+
+          <!-- 工序选择 -->
+          <div class="field-block">
+            <div class="field-block-title">
+              <span class="required">*</span> 选择工序
+              <span class="text-3" style="font-weight:400;font-size:12px;margin-left:6px">（共 ${cfg.processes.length} 个工序，每条记录选 1 个）</span>
+            </div>
+            <div class="opt-grid">
+              ${cfg.processes.map(p => `
+                <div class="opt-item ${record.processName === p.name ? 'selected' : ''}"
+                     onclick="selectProcess(${idx}, '${p.name.replace(/'/g, "\\'")}')">
+                  <span style="flex:1">${p.name}</span>
+                  ${p.devices && p.devices.length > 0 ? `<span class="text-3" style="font-size:11px">${p.devices.length}个${features.deviceLabel}</span>` : ''}
+                  ${record.processName === p.name ? '<span style="color:var(--primary)">✓</span>' : ''}
+                </div>
+              `).join('')}
+            </div>
+          </div>
+
+          <!-- 取样设备/取样点 -->
+          ${devices.length > 0 ? `
+            <div class="field-block">
+              <div class="field-block-title">
+                <span class="required">*</span> ${features.deviceLabel}
+                <span class="text-3" style="font-weight:400;font-size:12px;margin-left:6px">（${proc.name} 共 ${devices.length} 个${features.deviceLabel}）</span>
+              </div>
+              <div class="device-options">
+                ${devices.map(d => `
+                  <div class="opt-item ${record.deviceName === d ? 'selected' : ''}"
+                       onclick="selectDevice(${idx}, '${d.replace(/'/g, "\\'")}')">${d}</div>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
+
+          <!-- 检验次序（仅发酵工段） -->
+          ${features.needRound ? `
+            <div class="field-block">
+              <div class="field-block-title">
+                <span class="required">*</span> 检验次序
+                <span class="text-3" style="font-weight:400;font-size:12px;margin-left:6px">（对应纸质单据的时段标识）</span>
+              </div>
+              <div class="device-options">
+                ${cfg.rounds.map(r => `
+                  <div class="opt-item ${record.round === r ? 'selected' : ''}"
+                       onclick="selectRound(${idx}, '${r}')">${r}</div>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
+
+          <!-- 检验项目（动态加载） -->
+          ${showItems ? `
+            <div class="field-block">
+              <div class="field-block-title">
+                检验项目
+                <span class="text-3" style="font-weight:400;font-size:12px;margin-left:6px">
+                  （${proc.name}${record.deviceName ? ' · ' + record.deviceName : ''} · 共 ${items.length} 项 · 来自质检模板）
+                </span>
+              </div>
+              ${items.length === 0 ? `
+                <div class="empty" style="padding:20px">
+                  <div style="color:var(--text-3);font-size:13px">该工序在质检模板中未配置检验项目，请先到「质检模板配置」中完善</div>
+                </div>
+              ` : `
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th style="width:160px">项目</th>
+                      <th style="width:80px">单位</th>
+                      <th>规格 / 标准</th>
+                      <th style="width:200px">检验结果</th>
+                      <th style="width:160px">系统提示</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${items.map((it, ii) => renderItemRow(it, idx, ii)).join('')}
+                  </tbody>
+                </table>
+                ${type !== 'fermentation' ? `
+                  <div style="margin-top:14px;padding-top:14px;border-top:1px dashed var(--border)">
+                    <label class="form-label" style="margin-bottom:6px">检验结果（系统建议，可手动修改）</label>
+                    <div class="device-options">
+                      <div class="opt-item selected">合格</div>
+                      <div class="opt-item">不合格</div>
+                    </div>
+                  </div>
+                ` : ''}
+              `}
+            </div>
+          ` : `
+            <div class="field-block" style="background:var(--bg-soft);border-style:dashed">
+              <div class="text-3" style="text-align:center;padding:14px;font-size:13px">
+                ⏳ 请先选择${!record.processName ? '工序' : ''}${(!record.processName && devices.length > 0 && !record.deviceName) ? '和' : ''}${(devices.length > 0 && !record.deviceName) ? features.deviceLabel : ''}${features.needRound && record.processName && (devices.length === 0 || record.deviceName) && !record.round ? '及检验次序' : ''}，系统将根据所选工序加载对应的检验项目
+              </div>
+            </div>
+          `}
+        </div>
+      `;
+    }
+
+    function renderItemRow(it, recIdx, itemIdx) {
+      const inputId = `inp-${recIdx}-${itemIdx}`;
+      const hintId = `hint-${recIdx}-${itemIdx}`;
+      const specHasMin = it.specMin && it.specMin !== '—';
+      const specHasMax = it.specMax && it.specMax !== '—';
+
+      return `
+        <tr>
+          <td>
+            ${it.required ? '<span class="text-danger">*</span> ' : ''}
+            <b>${it.name}</b>
+            <span class="info-icon" title="${it.desc || ''}" style="margin-left:4px">i</span>
+          </td>
+          <td>${it.unit || '—'}</td>
+          <td>
+            <div style="font-size:12.5px;color:var(--text-2)">${it.desc || '—'}</div>
+            ${(specHasMin || specHasMax) ? `
+              <div class="form-help spec">规格：${specHasMin ? '≥' + it.specMin : ''}${(specHasMin && specHasMax) ? '，' : ''}${specHasMax ? '≤' + it.specMax : ''} ${it.unit || ''}</div>
+            ` : ''}
+          </td>
+          <td>
+            <input id="${inputId}" type="${it.dataType === '数值型' ? 'number' : 'text'}"
+              placeholder="请输入${it.name}"
+              data-min="${it.specMin}" data-max="${it.specMax}"
+              data-hint="${hintId}"
+              oninput="checkRange(this)" />
+          </td>
+          <td><span class="form-help" id="${hintId}">—</span></td>
+        </tr>
+      `;
+    }
+
+    // ========== 交互 ==========
+    window.imBase = function (k, v) {
+      if (!isIntermediate && !isQcBatch) return;
+      if (k === 'date') state.baseDate = v;
+      else if (k === 'inspectTime') state.baseInspectTime = v;
+      else if (k === 'shift') state.baseShift = v;
+      else if (k === 'team') state.baseTeam = v;
+      else if (k === 'sampleTime') state.baseSampleTime = v;
+    };
+
+    window.onImDivisionChange = function (v) {
+      if (!isIntermediate) return;
+      state.division = v;
+      state.selectedProcesses = [];
+      state.measured = {};
+      state.itemResult = {};
+      state.sampleDeviceByProcess = {};
+      render();
+    };
+
+    window.toggleImProcess = function (name) {
+      const i = state.selectedProcesses.indexOf(name);
+      if (i >= 0) {
+        state.selectedProcesses.splice(i, 1);
+        const rows = isQcBatch ? getQcFormRows() : getImFormRows();
+        rows.filter(r => r.process === name).forEach(r => {
+          delete state.measured[r.id];
+          delete state.itemResult[r.id];
+        });
+        delete state.sampleDeviceByProcess[name];
+      } else {
+        state.selectedProcesses.push(name);
+      }
+      render();
+    };
+
+    window.imSetMeasured = function (id, val) {
+      state.measured[id] = val;
+    };
+
+    window.imSetResult = function (id, val) {
+      state.itemResult[id] = val;
+    };
+
+    window.imSetSampleDevice = function (procName, val) {
+      if (!procName) return;
+      if (!val) delete state.sampleDeviceByProcess[procName];
+      else state.sampleDeviceByProcess[procName] = val;
+    };
+
+    window.qcAddEntry = function () {
+      if (!isQcBatch) return;
+      state.detailEntries.push({ processName: '', inspectTime: '', sampleTime: '' });
+      render();
+    };
+    window.qcRemoveEntry = function (entryIdx) {
+      if (!isQcBatch) return;
+      if ((state.detailEntries || []).length <= 1) {
+        toast('至少保留一行检验明细', 'warning');
+        return;
+      }
+      const entry = state.detailEntries[entryIdx];
+      if (entry && entry.processName) {
+        delete state.sampleDeviceByProcess[entry.processName];
+        getQcFormRows().filter(r => r.process === entry.processName).forEach(r => {
+          delete state.measured[entryIdx + '::' + r.id];
+          delete state.itemResult[entryIdx + '::' + r.id];
+        });
+      }
+      state.detailEntries.splice(entryIdx, 1);
+      render();
+    };
+    window.qcSetEntryProcess = function (entryIdx, processName) {
+      if (!isQcBatch) return;
+      const old = (state.detailEntries[entryIdx] || {}).processName;
+      if (old && old !== processName) {
+        getQcFormRows().filter(r => r.process === old).forEach(r => {
+          delete state.measured[entryIdx + '::' + r.id];
+          delete state.itemResult[entryIdx + '::' + r.id];
+        });
+      }
+      const oldEntry = state.detailEntries[entryIdx] || {};
+      state.detailEntries[entryIdx] = {
+        processName: processName || '',
+        inspectTime: oldEntry.inspectTime || '',
+        sampleTime: oldEntry.sampleTime || ''
+      };
+      render();
+    };
+    window.qcSetEntryTime = function (entryIdx, field, value) {
+      if (!isQcBatch) return;
+      if (!state.detailEntries[entryIdx]) state.detailEntries[entryIdx] = { processName: '', inspectTime: '', sampleTime: '' };
+      state.detailEntries[entryIdx][field] = value || '';
+    };
+
+    window.addRecord = function () {
+      if (isIntermediate) return;
+      state.records.push({ processName: '', deviceName: '', round: '', items: {} });
+      render();
+      // 滚动到新增的记录卡片
+      setTimeout(() => {
+        const cards = document.querySelectorAll('.record-card');
+        const last = cards[cards.length - 1];
+        if (last) last.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 50);
+    };
+    window.removeRecord = function (idx) {
+      state.records.splice(idx, 1);
+      render();
+    };
+    window.selectProcess = function (idx, name) {
+      state.records[idx].processName = name;
+      state.records[idx].deviceName = '';
+      render();
+    };
+    window.selectDevice = function (idx, name) {
+      state.records[idx].deviceName = name;
+      render();
+    };
+    window.selectRound = function (idx, round) {
+      state.records[idx].round = round;
+      render();
+    };
+
+    window.checkRange = function (input) {
+      const min = parseFloat(input.dataset.min);
+      const max = parseFloat(input.dataset.max);
+      const v = parseFloat(input.value);
+      const hint = document.getElementById(input.dataset.hint);
+      if (!hint) return;
+      if (input.value === '') {
+        hint.className = 'form-help'; hint.textContent = '—';
+        input.classList.remove('error'); return;
+      }
+      if (input.type === 'number' && isNaN(v)) {
+        hint.className = 'form-help warning'; hint.textContent = '请输入数字';
+        input.classList.add('error'); return;
+      }
+      if (input.type === 'number' && ((!isNaN(min) && v < min) || (!isNaN(max) && v > max))) {
+        hint.className = 'form-help warning'; hint.textContent = '⚠ 超出规格范围！';
+        input.classList.add('error');
+      } else {
+        hint.className = 'form-help success'; hint.textContent = '✓ 在规格范围内';
+        input.classList.remove('error');
+      }
+    };
+
+    window.onSave = function (mode) {
+      if (isIntermediate || isQcBatch) {
+        if (mode === 'draft') {
+          toast(isQcBatch ? '草稿已保存（质检科检验）' : '草稿已保存（中间体检验）', 'success');
+          return;
+        }
+        if (isIntermediate && (!state.baseSampleTime || !String(state.baseSampleTime).trim())) {
+          toast('请填写取样时间', 'warning');
+          return;
+        }
+        if (isIntermediate && !state.division) {
+          toast('请选择检验工序分组', 'warning');
+          return;
+        }
+        if (isQcBatch && !(state.detailEntries || []).some(e => e.processName)) {
+          toast('请至少新增一行并选择工序', 'warning');
+          return;
+        }
+        if (isIntermediate && !state.selectedProcesses.length) {
+          toast('请至少选择一个检验工序', 'warning');
+          return;
+        }
+        const rows = isQcBatch ? qcDetailRows() : imDetailRows();
+        for (let j = 0; j < rows.length; j++) {
+          const row = rows[j];
+          if (row.required) {
+            const mv = state.measured[row.id];
+            if (mv === undefined || mv === null || String(mv).trim() === '') {
+              toast('请填写「' + row.process + ' / ' + row.item + '」的测定值', 'warning');
+              return;
+            }
+          }
+          const ir = state.itemResult[row.id];
+          if (!ir) {
+            toast('请选择「' + row.process + ' / ' + row.item + '」的检验结果', 'warning');
+            return;
+          }
+        }
+        toast(isQcBatch ? '已提交质检科检验单，等待班组长审核' : '已提交中间体检验单，等待班组长审核', 'success');
+        setTimeout(() => { location.href = './list.html?type=' + type; }, 800);
+        return;
+      }
+
+      if (mode === 'draft') {
+        toast(`草稿已保存，共 ${state.records.length} 条检验记录`, 'success');
+        return;
+      }
+      // 校验
+      for (let i = 0; i < state.records.length; i++) {
+        const r = state.records[i];
+        if (!r.processName) {
+          toast(`第 ${i + 1} 条记录未选择工序`, 'warning'); return;
+        }
+        const proc = cfg.processes.find(p => p.name === r.processName);
+        if (proc.devices && proc.devices.length > 0 && !r.deviceName) {
+          toast(`第 ${i + 1} 条记录未选择${features.deviceLabel}`, 'warning'); return;
+        }
+        if (features.needRound && !r.round) {
+          toast(`第 ${i + 1} 条记录未选择检验次序`, 'warning'); return;
+        }
+      }
+      toast(`已批量提交 ${state.records.length} 条质检记录，等待班组长审核`, 'success');
+      setTimeout(() => location.href = `./list.html?type=${type}`, 800);
+    };
+
+    render();
+  </script>
+</body>
+</html>

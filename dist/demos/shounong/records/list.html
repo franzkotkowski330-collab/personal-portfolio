@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>原始记录表 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script>
+    const page = renderLayout({
+      activeKey: 'records-all',
+      breadcrumb: [{ label: '业务工作' }, { label: '原始记录表' }, { label: '原始记录表' }]
+    });
+
+    const recordTypes = [
+      'F42果糖检验', '发酵', '色谱', '糖化异构', '脱色', '离交', '超滤', '纳滤',
+      '蒸发', '煮糖', '结晶', '离心机', '烘干', '包装', '摇摆筛', 'QC检查'
+    ];
+
+    page.innerHTML = `
+      <div class="card">
+        <div class="query-card">
+          <div class="query-fields">
+            <span class="query-field"><label>记录类型</label><select>
+              <option>全部记录类型</option>
+              ${recordTypes.map(t => `<option>${t}</option>`).join('')}
+            </select></span>
+            <span class="query-field q-w-range"><label>日期范围</label><input type="date" value="2026-05-01" /><span class="date-sep">至</span><input type="date" value="2026-05-07" /></span>
+            <span class="query-field"><label>班次</label><select><option>全部班次</option><option>白班</option><option>夜班</option></select></span>
+            <span class="query-field"><label>班组</label><select><option>全部班组</option><option>甲班</option><option>乙班</option><option>丙班</option></select></span>
+            <span class="query-field"><label>状态</label><select><option>全部状态</option><option>草稿</option><option>已提交</option><option>已审核</option><option>被驳回</option></select></span>
+            <span class="query-field q-w-md"><label>单据编号</label><input type="text" placeholder="请输入" /></span>
+          </div>
+          <div class="query-actions">
+            <button class="btn">重置</button>
+            <button class="btn btn-primary">查询</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="table-card">
+          <div class="table-toolbar" style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px;">
+            <button class="btn btn-primary" onclick="onNew()">新增</button>
+            <button class="btn" onclick="toast('配置列表字段')">配置列表字段</button>
+            <button class="btn">⤓ 导出</button>
+          </div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>单据编号</th>
+                  <th>记录类型</th>
+                  <th>日期</th>
+                  <th>班次/班组</th>
+                  <th>工序</th>
+                  <th>记录行数</th>
+                  <th>SCADA回填</th>
+                  <th>创建人</th>
+                  <th>状态</th>
+                  <th class="col-actions">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${MOCK.recordList.map(r => `
+                  <tr>
+                    <td><a class="text-primary fw-500" href="./detail.html?id=${r.id}">${r.id}</a></td>
+                    <td>${r.type}</td>
+                    <td>${r.date}</td>
+                    <td>${r.shift} / ${r.team}</td>
+                    <td>${r.process}</td>
+                    <td>${r.rows}</td>
+                    <td>${r.scada ? '<span class="scada-badge">⚡ 有</span>' : '<span class="text-3">无</span>'}</td>
+                    <td>${r.creator}</td>
+                    <td>${statusTag(r.status)}</td>
+                    <td class="col-actions">
+                      <button class="btn-text" onclick="location.href='./detail.html?id=${r.id}'">查看</button>
+                      ${(r.status === 'draft' || r.status === 'rejected') ? `<button class="btn-text" onclick="location.href='./new.html?type=${encodeURIComponent(r.type)}&edit=1&id=${r.id}'">编辑</button>` : ''}
+                      ${(r.status === 'draft' || r.status === 'rejected') ? `<button class="btn-text danger" onclick="confirmDel('${r.id}')">删除</button>` : ''}
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+          <div class="pagination-v2">
+            <span class="pagination-total">共 ${MOCK.recordList.length} 条</span>
+            <select class="pagination-size"><option>100条/页</option><option>200条/页</option><option>300条/页</option><option>400条/页</option></select>
+            <button disabled>«</button><button disabled>‹</button><button class="active">1</button><button>›</button><button>»</button>
+            <span class="pagination-jumper">跳至 <input type="number" min="1" value="1" /> 页</span>
+          </div>
+        </div>
+      </div>
+    `;
+
+    function onNew() {
+      const grid = recordTypes.map(t => `
+        <div class="rec-type-card" onclick="goNew('${t}')">
+          <div class="rec-type-name">${t}</div>
+          <div class="rec-type-desc text-3">${getTypeDesc(t)}</div>
+        </div>
+      `).join('');
+
+      confirmDialog('选择记录类型', `
+        <div style="margin-bottom:12px;font-size:13px;color:var(--text-2)">
+          请选择要新建的原始记录类型，点击卡片直接进入对应模板的录入页面：
+        </div>
+        <div class="rec-type-grid">${grid}</div>
+        <div class="text-3" style="font-size:12px;margin-top:12px;line-height:1.6">
+          ⚡ 选择后系统将加载对应工序的原始记录模板，含 SCADA 字段的记录会自动尝试拉取数据
+        </div>
+        <style>
+          .rec-type-grid { display:grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-height: 360px; overflow-y: auto; }
+          .rec-type-card {
+            border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px;
+            cursor: pointer; transition: all 0.15s; background: #fff;
+          }
+          .rec-type-card:hover { border-color: var(--primary); background: var(--primary-light); transform: translateY(-1px); }
+          .rec-type-name { font-size: 13.5px; font-weight: 500; color: var(--text-1); margin-bottom: 4px; }
+          .rec-type-desc { font-size: 11.5px; line-height: 1.4; }
+        </style>
+      `, null, '关闭');
+    }
+
+    function goNew(type) {
+      location.href = `./new.html?type=${encodeURIComponent(type)}`;
+    }
+
+    function getTypeDesc(t) {
+      const descMap = {
+        'F42果糖检验': '原料浓度/果糖含量/异味/杂质 单据型',
+        '发酵': '种子罐/发酵罐 时序型多行',
+        '色谱': 'F97/A97 色谱多塔运行数据',
+        '糖化异构': '异构罐 满罐/出料色谱',
+        '脱色': '加炭/活性炭使用量记录',
+        '离交': '8 工位浓度/PH/电导/温度',
+        '超滤': '4 级膜运行参数',
+        '纳滤': '5 级膜运行参数',
+        '蒸发': '4 套蒸发系统进料/出料',
+        '煮糖': '阿贝测浓/真空度/蒸汽',
+        '结晶': '结晶机降温阶段温度',
+        '离心机': '3 台离心机批次记录',
+        '烘干': '热/冷风温度/管道压力',
+        '包装': '包装检验+包装物+质检',
+        '摇摆筛': '电机/筛网/产品目数',
+        'QC检查': '糖计划/色度/含量/PH/电导'
+      };
+      return descMap[t] || '';
+    }
+    function confirmDel(id) {
+      confirmDialog('删除记录', `确认删除 <b>${id}</b>？`, () => toast('已删除', 'success'));
+    }
+    window.onNew = onNew; window.confirmDel = confirmDel; window.goNew = goNew;
+  </script>
+</body>
+</html>

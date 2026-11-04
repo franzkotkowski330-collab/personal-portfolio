@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>检验表单配置 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script>
+    const DEPT_STORAGE_KEY = 'inspectionForm.departments.v1';
+
+    const page = renderLayout({
+      activeKey: 'inspection-form-config',
+      breadcrumb: [{ label: '数据&配置' }, { label: '检验表单配置' }]
+    });
+
+    const departments = loadDepartments();
+    let filters = { keyword: '' };
+
+    function loadDepartments() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(DEPT_STORAGE_KEY) || 'null');
+        if (Array.isArray(saved)) return saved;
+      } catch (e) {}
+      return (MOCK.inspectionFormDepartments || []).map(row => ({ ...row }));
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, s => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[s]));
+    }
+
+    function getFilteredList() {
+      const keyword = filters.keyword.trim().toLowerCase();
+      if (!keyword) return departments;
+      return departments.filter(d => d.name.toLowerCase().includes(keyword));
+    }
+
+    function render() {
+      const list = getFilteredList();
+      page.innerHTML = `
+        <div class="query-card">
+          <div class="query-card-body">
+            <span class="query-field q-w-xl">
+              <label>检验部门</label>
+              <input id="keyword" type="text" placeholder="请输入" value="${escapeHtml(filters.keyword)}" />
+            </span>
+            <div class="query-actions">
+              <button class="btn" onclick="resetFilters()">重置</button>
+              <button class="btn btn-primary" onclick="applyFilters()">查询</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-card">
+          <div class="table-toolbar">
+            <div class="table-toolbar-right">
+              <button class="btn" onclick="toast('配置列表字段', 'info')">⚙ 配置列表字段</button>
+              <button class="btn btn-primary" onclick="location.href='./detail.html'">新增</button>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>检验部门</th>
+                  <th class="col-actions">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${list.length ? list.map(dept => `
+                  <tr>
+                    <td>${escapeHtml(dept.name)}</td>
+                    <td class="col-actions">
+                      <button class="btn-text" onclick="location.href='./detail.html?dept=${encodeURIComponent(dept.code)}'">配置</button>
+                    </td>
+                  </tr>
+                `).join('') : `
+                  <tr><td colspan="2"><div class="empty" style="padding:32px">暂无符合条件的数据</div></td></tr>
+                `}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="pagination-v2">
+            <span class="pagination-total">共 ${list.length} 条</span>
+            <select class="pagination-size"><option>100条/页</option><option>200条/页</option><option>300条/页</option><option>400条/页</option></select>
+            <button disabled>«</button><button disabled>‹</button><button class="active">1</button><button>›</button><button>»</button>
+            <span class="pagination-jumper">跳至 <input type="number" min="1" value="1" /> 页</span>
+          </div>
+        </div>
+      `;
+    }
+
+    window.applyFilters = function () {
+      filters.keyword = document.getElementById('keyword').value;
+      render();
+    };
+
+    window.resetFilters = function () {
+      filters = { keyword: '' };
+      render();
+    };
+
+    render();
+  </script>
+</body>
+</html>

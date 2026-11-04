@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>检验项目管理 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+  <style>
+    .modal {
+      width: 560px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script>
+    const ITEM_STORAGE_KEY = 'basicData.inspectionItems.v1';
+    const ITEM_LOG_STORAGE_KEY = 'basicData.inspectionItemLogs.v1';
+    const DATA_TYPES = ['数值型', '文本型', '布尔型'];
+
+    let filters = { keyword: '', dataType: '', enabled: '' };
+    let itemList = loadItemList();
+    let itemLogs = loadItemLogs();
+
+    const page = renderLayout({
+      activeKey: 'basic-inspection-items',
+      breadcrumb: [{ label: '基础数据管理' }, { label: '检验项目管理' }]
+    });
+
+    function loadItemList() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(ITEM_STORAGE_KEY) || 'null');
+        if (Array.isArray(saved)) return saved;
+      } catch (e) {}
+      return (MOCK.inspectionItemManagementList || []).map(row => ({ ...row }));
+    }
+
+    function saveItemList() {
+      localStorage.setItem(ITEM_STORAGE_KEY, JSON.stringify(itemList));
+    }
+
+    function loadItemLogs() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(ITEM_LOG_STORAGE_KEY) || '{}');
+        return { ...(MOCK.inspectionItemManagementLogs || {}), ...(saved || {}) };
+      } catch (e) {
+        return { ...(MOCK.inspectionItemManagementLogs || {}) };
+      }
+    }
+
+    function saveItemLogs() {
+      localStorage.setItem(ITEM_LOG_STORAGE_KEY, JSON.stringify(itemLogs));
+    }
+
+    function currentUser() {
+      return localStorage.getItem('userName') || '王尚革';
+    }
+
+    function nowText() {
+      const d = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, s => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[s]));
+    }
+
+    function dataTypeTag(dataType) {
+      const cls = dataType === '数值型' ? 'tag-blue' : dataType === '文本型' ? 'tag-orange' : 'tag-green';
+      return `<span class="tag ${cls}">${escapeHtml(dataType)}</span>`;
+    }
+
+    function getFilteredList() {
+      const keyword = filters.keyword.trim().toLowerCase();
+      return itemList.filter(row => {
+        const hitKeyword = !keyword || row.name.toLowerCase().includes(keyword) || row.dataType.toLowerCase().includes(keyword);
+        const hitType = !filters.dataType || row.dataType === filters.dataType;
+        const hitEnabled = !filters.enabled || String(row.enabled) === filters.enabled;
+        return hitKeyword && hitType && hitEnabled;
+      });
+    }
+
+    function getStats() {
+      return {
+        total: itemList.length,
+        number: itemList.filter(row => row.dataType === '数值型').length,
+        text: itemList.filter(row => row.dataType === '文本型').length,
+        bool: itemList.filter(row => row.dataType === '布尔型').length
+      };
+    }
+
+    function render() {
+      const list = getFilteredList();
+      page.innerHTML = `
+        <div class="card">
+          <div class="filter-bar">
+            <span class="query-field q-w-xl"><label>关键词</label><input id="keyword" type="text" placeholder="项目名称 / 数据类型" value="${escapeHtml(filters.keyword)}" /></span>
+            <span class="query-field q-w-md"><label>数据类型</label><select id="dataType">
+              <option value="">全部</option>
+              ${DATA_TYPES.map(type => `<option value="${escapeHtml(type)}" ${filters.dataType === type ? 'selected' : ''}>${escapeHtml(type)}</option>`).join('')}
+            </select></span>
+            <span class="query-field q-w-sm"><label>状态</label><select id="enabled">
+              <option value="">全部</option>
+              <option value="true" ${filters.enabled === 'true' ? 'selected' : ''}>启用</option>
+              <option value="false" ${filters.enabled === 'false' ? 'selected' : ''}>停用</option>
+            </select></span>
+            <span class="filter-actions">
+              <button class="btn" onclick="resetFilters()">重置</button>
+            <button class="btn btn-primary" onclick="applyFilters()">查询</button>
+            </span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="table-toolbar">
+            <span class="text-3">共 ${list.length} 条</span>
+            <div class="table-toolbar-right">
+              <button class="btn">配置列表字段</button>
+              <button class="btn" onclick="exportList()">导出</button>
+              <button class="btn btn-primary" onclick="openItemEditor()">新增</button>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>项目名称</th>
+                  <th>数据类型</th>
+                  <th class="col-actions">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${list.length ? list.map(row => `
+                  <tr>
+                    <td><a class="text-primary fw-500" href="./inspection-item-detail.html?name=${encodeURIComponent(row.name)}">${escapeHtml(row.name)}</a></td>
+                    <td>${dataTypeTag(row.dataType)}</td>
+                    <td class="col-actions">
+                      <button class="btn-text" onclick="location.href='./inspection-item-detail.html?name=${encodeURIComponent(row.name)}'">查看</button>
+                      <button class="btn-text" onclick="openItemEditor('${escapeHtml(row.name)}')">编辑</button>
+                      <button class="btn-text danger" onclick="confirmDelete('${escapeHtml(row.name)}')">删除</button>
+                    </td>
+                  </tr>
+                `).join('') : `
+                  <tr><td colspan="3"><div class="empty" style="padding:32px">暂无符合条件的检验项目</div></td></tr>
+                `}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="pagination-v2">
+            <span class="pagination-total">共 ${list.length} 条</span>
+            <select class="pagination-size"><option>100条/页</option><option>200条/页</option><option>300条/页</option><option>400条/页</option></select>
+            <button disabled>&laquo;</button><button disabled>&lsaquo;</button><button class="active">1</button><button>&rsaquo;</button><button>&raquo;</button>
+            <span class="pagination-jumper">跳至 <input type="number" min="1" value="1" /> 页</span>
+          </div>
+        </div>
+      `;
+    }
+
+    window.applyFilters = function () {
+      filters = {
+        keyword: document.getElementById('keyword').value,
+        dataType: document.getElementById('dataType').value,
+        enabled: document.getElementById('enabled').value
+      };
+      render();
+    };
+
+    window.resetFilters = function () {
+      filters = { keyword: '', dataType: '', enabled: '' };
+      render();
+    };
+
+    window.exportList = function () {
+      toast('已导出检验项目列表', 'success');
+    };
+
+    function appendLog(name, log) {
+      itemLogs[name] = itemLogs[name] || [];
+      itemLogs[name].unshift(log);
+      saveItemLogs();
+    }
+
+    function collectDiff(oldRow, nextRow) {
+      const fields = [
+        { key: 'name', label: '项目名称' },
+        { key: 'dataType', label: '数据类型' },
+        { key: 'enabled', label: '状态', format: v => v ? '启用' : '停用' }
+      ];
+      return fields
+        .filter(f => oldRow[f.key] !== nextRow[f.key])
+        .map(f => ({
+          field: f.label,
+          old: f.format ? f.format(oldRow[f.key]) : oldRow[f.key],
+          new: f.format ? f.format(nextRow[f.key]) : nextRow[f.key]
+        }));
+    }
+
+    window.openItemEditor = function (name) {
+      const editing = !!name;
+      const row = editing
+        ? itemList.find(item => item.name === name)
+        : { name: '', dataType: '数值型', enabled: true };
+      if (!row) {
+        toast('未找到检验项目', 'error');
+        return;
+      }
+
+      confirmDialog(
+        editing ? '编辑检验项目' : '新增检验项目',
+        `
+          <div class="form-row" style="grid-template-columns:1fr 1fr">
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 项目名称</label>
+              <input id="form-name" type="text" value="${escapeHtml(row.name)}" placeholder="如 PH" />
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 数据类型</label>
+              <select id="form-data-type">
+                ${DATA_TYPES.map(type => `<option value="${escapeHtml(type)}" ${row.dataType === type ? 'selected' : ''}>${escapeHtml(type)}</option>`).join('')}
+              </select>
+            </div>
+            <div class="form-item">
+              <label class="form-label">状态</label>
+              <select id="form-enabled">
+                <option value="true" ${row.enabled ? 'selected' : ''}>启用</option>
+                <option value="false" ${!row.enabled ? 'selected' : ''}>停用</option>
+              </select>
+            </div>
+          </div>
+        `,
+        () => {
+          const next = {
+            name: document.getElementById('form-name').value.trim(),
+            dataType: document.getElementById('form-data-type').value,
+            enabled: document.getElementById('form-enabled').value === 'true'
+          };
+
+          if (!next.name || !next.dataType) {
+            toast('请填写项目名称和数据类型', 'error');
+            return false;
+          }
+
+          const user = currentUser();
+          const time = nowText();
+          if (editing) {
+            const duplicate = itemList.some(item => item.name === next.name && item.name !== name);
+            if (duplicate) {
+              toast('项目名称已存在，请更换名称', 'error');
+              return false;
+            }
+            const idx = itemList.findIndex(item => item.name === name);
+            const oldRow = itemList[idx];
+            const nextRow = { ...oldRow, ...next };
+            const diff = collectDiff(oldRow, nextRow);
+            if (diff.length) {
+              itemList[idx] = { ...nextRow, updatedBy: user, updatedAt: time };
+              if (next.name !== name && itemLogs[name]) {
+                itemLogs[next.name] = itemLogs[name];
+                delete itemLogs[name];
+              }
+              saveItemList();
+              appendLog(next.name, { time, user, action: '编辑保存', type: 'edit', diff });
+            }
+            toast(diff.length ? '已保存检验项目修改' : '未发现字段变更', diff.length ? 'success' : 'warning');
+          } else {
+            if (itemList.some(item => item.name === next.name)) {
+              toast('项目名称已存在，请更换名称', 'error');
+              return false;
+            }
+            const newRow = {
+              ...next,
+              creator: user,
+              createdAt: time,
+              updatedBy: user,
+              updatedAt: time
+            };
+            itemList.unshift(newRow);
+            saveItemList();
+            appendLog(next.name, { time, user, action: '创建', type: 'create' });
+            toast('已新增检验项目', 'success');
+          }
+          render();
+        },
+        editing ? '保存' : '新增'
+      );
+    };
+
+    window.confirmDelete = function (name) {
+      const row = itemList.find(item => item.name === name);
+      if (!row) {
+        toast('未找到检验项目', 'error');
+        return;
+      }
+      confirmDialog('删除检验项目', `确定删除检验项目 <b>${escapeHtml(row.name)}</b>？`, () => {
+        itemList = itemList.filter(item => item.name !== name);
+        saveItemList();
+        appendLog(name, {
+          time: nowText(),
+          user: currentUser(),
+          action: '删除',
+          type: 'delete',
+          diff: [{ field: '检验项目', old: row.name, new: '已删除' }]
+        });
+        toast('已删除检验项目', 'success');
+        render();
+      }, '删除');
+    };
+
+    render();
+  </script>
+</body>
+</html>

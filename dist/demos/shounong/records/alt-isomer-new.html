@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>新增阿糖异构原始记录 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+  <style>
+    .form-row.cols-3 { grid-template-columns: repeat(3, 1fr); }
+    .form-row.cols-4 { grid-template-columns: repeat(4, 1fr); }
+    .form-row.cols-2 { grid-template-columns: repeat(2, 1fr); }
+    .form-row { padding: 16px; }
+    .section-tip {
+      margin: 0 16px 12px; padding: 8px 12px;
+      background: var(--info-light); border-left: 3px solid var(--info);
+      border-radius: 4px; font-size: 12.5px; color: var(--text-2); line-height: 1.7;
+    }
+    .pick-btn-wrap { display: flex; gap: 6px; align-items: center; }
+    .pick-btn-wrap input { flex: 1; }
+    .pick-btn-wrap .btn-sm { white-space: nowrap; }
+    .qc-pick-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .qc-pick-table th, .qc-pick-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; }
+    .qc-pick-table thead th { background: var(--bg-soft); font-weight: 600; }
+    .qc-pick-table tbody tr { cursor: pointer; }
+    .qc-pick-table tbody tr:hover { background: var(--primary-light); }
+    .qc-pick-table tbody tr.selected { background: var(--primary-light); }
+    .modal { width: 920px; max-width: 95vw; }
+    .empty-qc { padding: 28px; text-align: center; color: var(--text-3); font-size: 13px; }
+    .form-help-warn { color: var(--warning); }
+    .ai-tag { display: inline-block; background: var(--info-light); color: var(--info);
+      font-size: 11px; padding: 1px 6px; border-radius: 3px; margin-left: 4px; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const editId = params.get('id');
+    const isEdit = params.get('edit') === '1' && !!editId;
+    const editRow = isEdit ? MOCK.altIsomerRecordList.find(r => r.id === editId) : null;
+
+    const page = renderLayout({
+      activeKey: 'records-alt-isomer',
+      breadcrumb: [
+        { label: '业务工作' },
+        { label: '原始记录表' },
+        { label: '阿糖异构原始记录', href: './alt-isomer-list.html' },
+        { label: isEdit ? '编辑' : '新增' }
+      ]
+    });
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, s => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[s]));
+    }
+
+    // 表单初始值
+    const userName = localStorage.getItem('userName') || '张三';
+    const state = editRow ? Object.assign({}, editRow) : {
+      id: '',
+      date: new Date().toISOString().slice(0, 10),
+      shift: '白班',
+      team: '甲班',
+      recorder: userName,
+      tankNo: '',
+      batchNo: '',
+      feedTime: '',
+      fullTime: '',
+      fullVolume: '',
+      fullConcentration: '',
+      fullTemperature: '',
+      fullPh: '',
+      enzymeVendor: '',
+      enzymeBatch: '',
+      enzymeVolume: '',
+      mnVendor: '',
+      mnBatch: '',
+      mnAmount: '',
+      dischargeTime: '',
+      altConcentration: '',
+      altContent: '',
+      fructoseContent: '',
+      glucoseContent: '',
+      remark: '',
+      qcLinkId: ''
+    };
+
+    function fmtDtLocal(v) {
+      if (!v) return '';
+      return v.includes(' ') ? v.replace(' ', 'T').slice(0, 16) : v.slice(0, 16);
+    }
+
+    function render() {
+      page.innerHTML = `
+
+        <!-- 基础信息 -->
+        <div class="card">
+          <div class="card-header"><div class="card-title">基础信息</div></div>
+          <div class="section-tip">
+            班次取自<b>【班次管理】</b>，班组取自<b>【班组管理】</b>，罐号取自<b>【设备管理】</b>中"异构"工序关联的设备。
+          </div>
+          <div class="form-row cols-4">
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 班次</label>
+              <select id="shift">
+                <option ${state.shift === '白班' ? 'selected' : ''}>白班</option>
+                <option ${state.shift === '夜班' ? 'selected' : ''}>夜班</option>
+              </select>
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 班组</label>
+              <select id="team">
+                <option ${state.team === '甲班' ? 'selected' : ''}>甲班</option>
+                <option ${state.team === '乙班' ? 'selected' : ''}>乙班</option>
+                <option ${state.team === '丙班' ? 'selected' : ''}>丙班</option>
+              </select>
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 记录人</label>
+              <input id="recorder" type="text" value="${escapeHtml(state.recorder)}" />
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 罐号</label>
+              <select id="tankNo">
+                <option value="">请选择</option>
+                ${MOCK.altIsomerTanks.map(t => `<option ${state.tankNo === t ? 'selected' : ''}>${t}</option>`).join('')}
+              </select>
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 批号</label>
+              <input id="batchNo" type="text" placeholder="如 ISO-20260513-A03" value="${escapeHtml(state.batchNo)}" />
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 进料时间</label>
+              <input id="feedTime" type="datetime-local" value="${escapeHtml(fmtDtLocal(state.feedTime))}" />
+              <div class="form-help">精确到分钟，列表"日期"取此时间的日期部分</div>
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 满罐时间</label>
+              <input id="fullTime" type="datetime-local" value="${escapeHtml(fmtDtLocal(state.fullTime))}" />
+              <div class="form-help">精确到分钟</div>
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 满罐体积 (m³)</label>
+              <input id="fullVolume" type="number" step="0.1" min="0" placeholder="数字输入" value="${escapeHtml(state.fullVolume)}" />
+            </div>
+          </div>
+        </div>
+
+        <!-- 控制指标 -->
+        <div class="card">
+          <div class="card-header"><div class="card-title">控制指标</div></div>
+          <div class="section-tip">
+            浓度建议 10~20%、温度建议 10~20℃、PH 建议 4~9，超出范围将提示但不阻断提交。
+          </div>
+          <div class="form-row cols-3">
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 满罐浓度 (%)</label>
+              <input id="fullConcentration" type="number" step="0.1" min="0" max="100"
+                placeholder="建议 10~20" value="${escapeHtml(state.fullConcentration)}" />
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 满罐温度 (℃)</label>
+              <input id="fullTemperature" type="number" step="0.1" placeholder="建议 10~20"
+                value="${escapeHtml(state.fullTemperature)}" />
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 满罐PH</label>
+              <input id="fullPh" type="number" step="0.01" min="0" max="14"
+                placeholder="建议 4~9" value="${escapeHtml(state.fullPh)}" />
+            </div>
+          </div>
+        </div>
+
+        <!-- 辅料明细 -->
+        <div class="card">
+          <div class="card-header"><div class="card-title">辅料明细</div></div>
+          <div class="section-tip">
+            酶制剂、硫酸锰的<b>厂家</b>取自<b>【辅料管理】</b>中"异构"工序对应辅料的供应商列表（下拉单选）；
+            批号为文本输入；加酶量 / 用量为数字输入。
+          </div>
+          <div class="form-row cols-3">
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 酶制剂厂家</label>
+              <select id="enzymeVendor">
+                <option value="">请选择</option>
+                ${MOCK.altIsomerEnzymeVendors.map(v => `<option ${state.enzymeVendor === v ? 'selected' : ''}>${escapeHtml(v)}</option>`).join('')}
+              </select>
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 酶制剂批号</label>
+              <input id="enzymeBatch" type="text" placeholder="文本输入" value="${escapeHtml(state.enzymeBatch)}" />
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 酶制剂加酶量 (m³)</label>
+              <input id="enzymeVolume" type="number" step="0.01" min="0" placeholder="数字输入"
+                value="${escapeHtml(state.enzymeVolume)}" />
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 硫酸锰厂家</label>
+              <select id="mnVendor">
+                <option value="">请选择</option>
+                ${MOCK.altIsomerMnVendors.map(v => `<option ${state.mnVendor === v ? 'selected' : ''}>${escapeHtml(v)}</option>`).join('')}
+              </select>
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 硫酸锰批号</label>
+              <input id="mnBatch" type="text" placeholder="文本输入" value="${escapeHtml(state.mnBatch)}" />
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 硫酸锰用量 (kg)</label>
+              <input id="mnAmount" type="number" step="0.01" min="0" placeholder="数字输入"
+                value="${escapeHtml(state.mnAmount)}" />
+            </div>
+          </div>
+        </div>
+
+        <!-- 出料 -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">出料 <span class="ai-tag">智能匹配质检数据</span></div>
+            <button class="btn btn-sm" onclick="openQcPicker()">📊 从质检数据选择回填</button>
+          </div>
+          <div class="section-tip">
+            阿糖浓度、阿糖含量、果糖含量、葡萄糖含量将根据
+            <b>异构工序 + 罐号 + 班次 + 出料日期</b> 自动从【质检科检验】中匹配出料色谱数据；
+            也可点击右上角"从质检数据选择回填"手动选择某一条检验数据后系统自动填入对应字段。
+            ${state.qcLinkId ? `<br>当前已关联质检单：<b id="qc-link-text">${escapeHtml(state.qcLinkId)}</b> <button class="btn-text danger btn-sm" onclick="clearQcLink()">解除关联</button>` : ''}
+          </div>
+          <div class="form-row cols-3">
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 出料时间</label>
+              <input id="dischargeTime" type="datetime-local" value="${escapeHtml(fmtDtLocal(state.dischargeTime))}" />
+              <div class="form-help">精确到分钟</div>
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 阿糖浓度 (%)</label>
+              <div class="pick-btn-wrap">
+                <input id="altConcentration" type="number" step="0.01" min="0" value="${escapeHtml(state.altConcentration)}" />
+                <button class="btn btn-sm" onclick="openQcPicker('altConcentration')">选择</button>
+              </div>
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 阿糖含量 (%)</label>
+              <div class="pick-btn-wrap">
+                <input id="altContent" type="number" step="0.01" min="0" value="${escapeHtml(state.altContent)}" />
+                <button class="btn btn-sm" onclick="openQcPicker('altContent')">选择</button>
+              </div>
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 果糖含量 (%)</label>
+              <div class="pick-btn-wrap">
+                <input id="fructoseContent" type="number" step="0.01" min="0" value="${escapeHtml(state.fructoseContent)}" />
+                <button class="btn btn-sm" onclick="openQcPicker('fructoseContent')">选择</button>
+              </div>
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 葡萄糖含量 (%)</label>
+              <div class="pick-btn-wrap">
+                <input id="glucoseContent" type="number" step="0.01" min="0" value="${escapeHtml(state.glucoseContent)}" />
+                <button class="btn btn-sm" onclick="openQcPicker('glucoseContent')">选择</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 备注 -->
+        <div class="card">
+          <div class="card-header"><div class="card-title">备注</div></div>
+          <div style="padding: 0 16px 16px">
+            <textarea id="remark" rows="3" placeholder="本次记录的补充说明...">${escapeHtml(state.remark)}</textarea>
+          </div>
+        </div>
+
+        <div class="text-center" style="padding:8px 0 24px">
+          <button class="btn" onclick="location.href='./alt-isomer-list.html'">取消</button>
+          <button class="btn" onclick="onSave('draft')">保存草稿</button>
+          <button class="btn btn-primary" onclick="onSave('submit')">正式提交</button>
+        </div>
+      `;
+    }
+
+    function collectForm() {
+      const get = id => (document.getElementById(id) || {}).value || '';
+      return {
+        shift: get('shift'),
+        team: get('team'),
+        recorder: get('recorder'),
+        tankNo: get('tankNo'),
+        batchNo: get('batchNo'),
+        feedTime: get('feedTime').replace('T', ' '),
+        fullTime: get('fullTime').replace('T', ' '),
+        fullVolume: get('fullVolume'),
+        fullConcentration: get('fullConcentration'),
+        fullTemperature: get('fullTemperature'),
+        fullPh: get('fullPh'),
+        enzymeVendor: get('enzymeVendor'),
+        enzymeBatch: get('enzymeBatch'),
+        enzymeVolume: get('enzymeVolume'),
+        mnVendor: get('mnVendor'),
+        mnBatch: get('mnBatch'),
+        mnAmount: get('mnAmount'),
+        dischargeTime: get('dischargeTime').replace('T', ' '),
+        altConcentration: get('altConcentration'),
+        altContent: get('altContent'),
+        fructoseContent: get('fructoseContent'),
+        glucoseContent: get('glucoseContent'),
+        remark: get('remark')
+      };
+    }
+
+    function validate(f) {
+      const required = {
+        tankNo: '罐号', batchNo: '批号', feedTime: '进料时间', fullTime: '满罐时间',
+        fullVolume: '满罐体积', fullConcentration: '满罐浓度', fullTemperature: '满罐温度',
+        fullPh: '满罐PH', enzymeVendor: '酶制剂厂家', enzymeBatch: '酶制剂批号', enzymeVolume: '酶制剂加酶量',
+        mnVendor: '硫酸锰厂家', mnBatch: '硫酸锰批号', mnAmount: '硫酸锰用量',
+        dischargeTime: '出料时间', altConcentration: '阿糖浓度', altContent: '阿糖含量',
+        fructoseContent: '果糖含量', glucoseContent: '葡萄糖含量'
+      };
+      const miss = [];
+      Object.keys(required).forEach(k => {
+        if (f[k] === '' || f[k] === undefined || f[k] === null) miss.push(required[k]);
+      });
+      return miss;
+    }
+
+    window.onSave = function (mode) {
+      const f = collectForm();
+      if (mode === 'submit') {
+        const miss = validate(f);
+        if (miss.length) {
+          toast('请填写必填项：' + miss.slice(0, 3).join('、') + (miss.length > 3 ? ' 等' : ''), 'error');
+          return;
+        }
+      }
+      toast(mode === 'draft' ? '草稿已保存' : '已正式提交，等待班组长审核', 'success');
+      setTimeout(() => location.href = './alt-isomer-list.html', 600);
+    };
+
+    window.clearQcLink = function () {
+      state.qcLinkId = '';
+      render();
+      toast('已解除质检数据关联', 'success');
+    };
+
+    // ========== 从质检数据选择回填 ==========
+    function matchQcRows() {
+      // 优先按"罐号 + 班次 + 出料日期"匹配
+      const f = collectForm();
+      const dischargeDate = (f.dischargeTime || '').slice(0, 10);
+      let rows = MOCK.altIsomerQcData.slice();
+      // 罐号匹配
+      if (f.tankNo) rows = rows.filter(r => r.tankNo === f.tankNo);
+      // 班次匹配
+      if (f.shift) rows = rows.filter(r => r.shift === f.shift);
+      // 日期范围（出料日期或进料日期）
+      const feedDate = (f.feedTime || '').slice(0, 10);
+      if (dischargeDate || feedDate) {
+        rows = rows.filter(r => {
+          // 允许检验日期是出料日期当天或前一天（满罐日 → 出料日跨夜）
+          if (dischargeDate && r.date === dischargeDate) return true;
+          if (feedDate && r.date === feedDate) return true;
+          // 取样时间在 [进料-1天, 出料+1天] 之间
+          const t = new Date(r.sampleTime.replace(' ', 'T')).getTime();
+          const dEnd = dischargeDate ? new Date(dischargeDate + 'T23:59').getTime() + 86400000 : Infinity;
+          const dStart = feedDate ? new Date(feedDate + 'T00:00').getTime() - 86400000 : -Infinity;
+          return t >= dStart && t <= dEnd;
+        });
+      }
+      // 默认按取样时间倒序
+      rows.sort((a, b) => new Date(b.sampleTime.replace(' ', 'T')) - new Date(a.sampleTime.replace(' ', 'T')));
+      return rows;
+    }
+
+    window.openQcPicker = function (focusField) {
+      const rows = matchQcRows();
+      const tip = `根据当前已选的 <b>罐号 ${state.tankNo || (document.getElementById('tankNo') || {}).value || '—'}</b> /
+        <b>班次 ${(document.getElementById('shift') || {}).value || '—'}</b> /
+        <b>出料日期 ${((document.getElementById('dischargeTime') || {}).value || '').slice(0, 10) || '—'}</b>
+        匹配到 <b>${rows.length}</b> 条质检科检验记录${focusField ? `（点击行将回填到 <b>${({
+          altConcentration: '阿糖浓度', altContent: '阿糖含量',
+          fructoseContent: '果糖含量', glucoseContent: '葡萄糖含量'
+        })[focusField] || focusField}</b>）` : '（点击行将一并回填四个色谱字段）'}：`;
+      const body = `
+        <div style="font-size:13px;color:var(--text-2);margin-bottom:10px;line-height:1.7">${tip}</div>
+        ${rows.length ? `
+          <div style="max-height:400px;overflow-y:auto">
+            <table class="qc-pick-table" id="qc-pick-table">
+              <thead>
+                <tr>
+                  <th>选</th>
+                  <th>质检单号</th>
+                  <th>工序 / 罐号</th>
+                  <th>班次 / 日期</th>
+                  <th>取样时间</th>
+                  <th>阿糖浓度</th>
+                  <th>阿糖含量</th>
+                  <th>果糖含量</th>
+                  <th>葡萄糖含量</th>
+                  <th>化验员</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows.map(r => `
+                  <tr data-qc-id="${r.id}"
+                      data-alt-c="${r.altConcentration}"
+                      data-alt-ct="${r.altContent}"
+                      data-fru="${r.fructoseContent}"
+                      data-glu="${r.glucoseContent}">
+                    <td><input type="radio" name="qc-pick" /></td>
+                    <td><b>${r.id}</b></td>
+                    <td>${r.process} · ${r.tankNo}</td>
+                    <td>${r.shift} · ${r.date}</td>
+                    <td>${r.sampleTime}</td>
+                    <td>${r.altConcentration}%</td>
+                    <td>${r.altContent}%</td>
+                    <td>${r.fructoseContent}%</td>
+                    <td>${r.glucoseContent}%</td>
+                    <td>${r.inspector}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        ` : `<div class="empty-qc">未匹配到符合条件的质检数据。<br>请检查"罐号 / 班次 / 出料日期"是否已填写。</div>`}
+      `;
+      confirmDialog('选择质检数据', body, () => {
+        const selected = document.querySelector('input[name="qc-pick"]:checked');
+        if (!selected) {
+          toast('请先选择一条质检数据', 'warning');
+          return false;
+        }
+        const tr = selected.closest('tr');
+        const id = tr.dataset.qcId;
+        const altC = tr.dataset.altC;
+        const altCt = tr.dataset.altCt;
+        const fru = tr.dataset.fru;
+        const glu = tr.dataset.glu;
+        if (focusField) {
+          const map = { altConcentration: altC, altContent: altCt, fructoseContent: fru, glucoseContent: glu };
+          const el = document.getElementById(focusField);
+          if (el) el.value = map[focusField];
+          state.qcLinkId = id;
+          state[focusField] = map[focusField];
+        } else {
+          if (document.getElementById('altConcentration')) document.getElementById('altConcentration').value = altC;
+          if (document.getElementById('altContent')) document.getElementById('altContent').value = altCt;
+          if (document.getElementById('fructoseContent')) document.getElementById('fructoseContent').value = fru;
+          if (document.getElementById('glucoseContent')) document.getElementById('glucoseContent').value = glu;
+          state.qcLinkId = id;
+          state.altConcentration = altC;
+          state.altContent = altCt;
+          state.fructoseContent = fru;
+          state.glucoseContent = glu;
+        }
+        toast(`已回填来自 ${id} 的检验数据`, 'success');
+        render();
+      }, '确认回填');
+      // 点击行即选中 radio
+      setTimeout(() => {
+        document.querySelectorAll('#qc-pick-table tbody tr').forEach(tr => {
+          tr.addEventListener('click', e => {
+            const r = tr.querySelector('input[type=radio]');
+            if (r) {
+              r.checked = true;
+              document.querySelectorAll('#qc-pick-table tbody tr').forEach(x => x.classList.remove('selected'));
+              tr.classList.add('selected');
+            }
+          });
+        });
+      }, 0);
+    };
+
+    if (isEdit && !editRow) {
+      page.innerHTML = `
+`;
+    } else {
+      render();
+    }
+  </script>
+</body>
+</html>

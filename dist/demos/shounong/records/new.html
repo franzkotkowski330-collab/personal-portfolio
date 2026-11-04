@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>新建原始记录 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+  <style>
+    .multi-row-table { overflow-x: auto; }
+    .multi-row-table table { min-width: 100%; }
+    .multi-row-table input,
+    .multi-row-table select {
+      width: 100%; min-width: 70px; height: 30px;
+      padding: 0 6px; font-size: 12.5px;
+    }
+    .scada-cell {
+      position: relative;
+    }
+    .scada-cell::before {
+      content: 'S'; position: absolute;
+      top: 4px; right: 4px; z-index: 2;
+      width: 14px; height: 14px; line-height: 14px; text-align: center;
+      background: var(--info); color: #fff; font-size: 10px; font-weight: 600;
+      border-radius: 3px; pointer-events: none;
+    }
+    .scada-cell input {
+      background: var(--info-light);
+      border-color: var(--info);
+    }
+    .row-num {
+      width: 36px; text-align: center; color: var(--text-3); font-size: 12px;
+      background: var(--bg-soft);
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const type = params.get('type') || '发酵';
+    const isEdit = params.get('edit') === '1';
+    const id = params.get('id');
+    const cfg = MOCK.recordFormConfig[type];
+
+    const page = renderLayout({
+      activeKey: 'records-all',
+      breadcrumb: [
+        { label: '业务工作' },
+        { label: '原始记录表' },
+        { label: '原始记录表', href: './list.html' },
+        { label: isEdit ? `编辑 - ${type}原始记录` : `新建 - ${type}原始记录` }
+      ]
+    });
+
+    if (!cfg) {
+      page.innerHTML = `
+        <div class="empty">
+          <div class="icon">⚠</div>
+          <div>未找到 <b>${type}</b> 的记录模板配置</div>
+          <button class="btn btn-primary mt-12" onclick="history.back()">返回</button>
+        </div>`;
+      throw new Error('config not found');
+    }
+
+    const state = {
+      header: {},
+      rows: [{}], // 多行模式
+      sectionRows: {} // 包装等多区块多行
+    };
+
+    // 默认填充几行（编辑态模拟有数据）
+    if (cfg.mode === 'multi-row' && isEdit) {
+      state.rows = [
+        getMockRow(0), getMockRow(1), getMockRow(2)
+      ];
+    } else if (cfg.mode === 'multi-row') {
+      state.rows = [{}, {}];
+    }
+    if (cfg.mode === 'mixed') {
+      cfg.sections.forEach((sec, idx) => {
+        if (sec.mode === 'multi-row') state.sectionRows[idx] = isEdit ? [{}, {}] : [{}];
+      });
+    }
+
+    function getMockRow(idx) {
+      const r = {};
+      const baseTime = 8 + idx;
+      cfg.rowFields.forEach(f => {
+        if (f.name === '时间') r[f.name] = `${String(baseTime).padStart(2, '0')}:00`;
+        else if (f.name === '罐号' || f.name === '结晶机编号' || f.name === '离心机编号') r[f.name] = '1#';
+        else if (f.name === 'PH' || f.name === '满罐PH') r[f.name] = '7.0';
+        else if (f.name.includes('浓度')) r[f.name] = '12.5';
+        else if (f.name.includes('温度')) r[f.name] = '32.5';
+        else if (f.name.includes('压力')) r[f.name] = '0.045';
+      });
+      return r;
+    }
+
+    function render() {
+      page.innerHTML = `
+        <div class="card">
+          <div class="card-header"><div class="card-title">基础信息（表头）</div></div>
+          ${renderHeader()}
+        </div>
+
+        ${cfg.mode === 'single-row' ? renderSingleRow() : ''}
+        ${cfg.mode === 'multi-row' ? renderMultiRow() : ''}
+        ${cfg.mode === 'mixed' ? renderMixed() : ''}
+
+        <div class="card">
+          <div class="card-header"><div class="card-title">备注</div></div>
+          <textarea placeholder="本次记录的补充说明..."></textarea>
+        </div>
+
+        <div class="text-center" style="padding:8px 0 24px">
+          <button class="btn" onclick="history.back()">取消</button>
+          <button class="btn" onclick="onSave('draft')">保存草稿</button>
+          <button class="btn btn-primary" onclick="onSave('submit')">正式提交</button>
+        </div>
+      `;
+    }
+
+    function renderHeader() {
+      const userName = localStorage.getItem('userName') || '张三';
+      const headerFields = cfg.header || cfg.sections?.[0]?.fields || [];
+      return `
+        <div class="form-row">
+          ${headerFields.map(f => renderField(f, 'header')).join('')}
+          <div class="form-item">
+            <label class="form-label">班组</label>
+            <select><option>甲班</option><option>乙班</option><option>丙班</option></select>
+          </div>
+          <div class="form-item">
+            <label class="form-label">记录人</label>
+            <input type="text" value="${userName}" readonly />
+          </div>
+        </div>
+      `;
+    }
+
+    function renderField(f, scope) {
+      const required = f.required ? '<span class="required">*</span> ' : '';
+      const unit = f.unit ? ` <span class="text-3" style="font-size:12px;font-weight:400">(${f.unit})</span>` : '';
+      const scadaBadge = f.scada ? '<span class="scada-badge">⚡ S</span>' : '';
+      const inputType = f.type === 'date' ? 'date'
+        : f.type === 'time' ? 'time'
+        : f.type === 'number' ? 'number'
+        : 'text';
+
+      let control = '';
+      if (f.type === 'select') {
+        control = `<select>${(f.options || []).map(o => `<option>${o}</option>`).join('')}</select>`;
+      } else {
+        control = `<input type="${inputType}" placeholder="${f.placeholder || ''}" ${f.scada ? 'value="(SCADA待回填)"' : ''} ${f.autoFill ? `value="${localStorage.getItem('userName') || ''}"` : ''} />`;
+      }
+
+      return `
+        <div class="form-item">
+          <label class="form-label">${required}${f.name}${unit}${scadaBadge}</label>
+          ${control}
+          ${f.hint ? `<div class="form-help">${f.hint}</div>` : ''}
+        </div>
+      `;
+    }
+
+    // ========== 单行表单 ==========
+    function renderSingleRow() {
+      const sec = cfg.sections[0];
+      return `
+        <div class="card">
+          <div class="card-header"><div class="card-title">${sec.title || '检验内容'}</div></div>
+          <div class="form-row">
+            ${sec.fields.map(f => renderField(f, 'main')).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    // ========== 多行时序表 ==========
+    function renderMultiRow() {
+      return `
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              过程数据（时序型）
+              <span class="text-3" style="font-weight:400;font-size:12px">· 共 ${state.rows.length} 行 · 每小时一条</span>
+            </div>
+            <button class="btn btn-sm btn-primary" onclick="addRow()">+ 添加记录行</button>
+          </div>
+          <div class="multi-row-table">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th class="row-num">#</th>
+                  ${cfg.rowFields.map(f => `
+                    <th style="${f.width ? `width:${f.width}px;min-width:${f.width}px` : ''}">
+                      ${f.required ? '<span class="text-danger">*</span> ' : ''}
+                      ${f.name}
+                      ${f.unit ? ` <span class="text-3" style="font-size:11px;font-weight:400">(${f.unit})</span>` : ''}
+                      ${f.scada ? '<span class="scada-badge">⚡ S</span>' : ''}
+                    </th>
+                  `).join('')}
+                  <th style="width:80px;text-align:right">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${state.rows.map((row, ri) => `
+                  <tr>
+                    <td class="row-num">${ri + 1}</td>
+                    ${cfg.rowFields.map(f => `
+                      <td class="${f.scada ? 'scada-cell' : ''}">
+                        ${renderRowCell(f, row, ri)}
+                      </td>
+                    `).join('')}
+                    <td style="text-align:right">
+                      ${state.rows.length > 1 ? `<button class="btn-text danger btn-sm" onclick="removeRow(${ri})">删除</button>` : ''}
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+          <div class="text-3" style="font-size:12px;margin-top:10px;line-height:1.6">
+            💡 <b>SCADA 字段说明</b>：标记 <span class="scada-badge">⚡ S</span> 的字段在保存时会自动从 SCADA 拉取最近时间点数据；可手动修改覆盖（操作记录会保留 SCADA 原值）。
+            ${cfg.rowFields.some(f => f.scada) ? '' : '当前模板无 SCADA 字段。'}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderRowCell(f, row, ri) {
+      const val = row[f.name] || '';
+      if (f.type === 'select') {
+        return `<select>${(f.options || []).map(o => `<option ${val === o ? 'selected' : ''}>${o}</option>`).join('')}</select>`;
+      }
+      const inputType = f.type === 'time' ? 'time' : f.type === 'date' ? 'date' : f.type === 'number' ? 'number' : 'text';
+      return `<input type="${inputType}" value="${val}" ${f.step ? `step="${f.step}"` : ''} ${f.min !== undefined ? `min="${f.min}"` : ''} ${f.max !== undefined ? `max="${f.max}"` : ''} />`;
+    }
+
+    // ========== 复合表单（包装） ==========
+    function renderMixed() {
+      return cfg.sections.map((sec, idx) => `
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">${sec.title}</div>
+            ${sec.mode === 'multi-row' ? `<button class="btn btn-sm btn-primary" onclick="addSecRow(${idx})">+ 添加行</button>` : ''}
+          </div>
+          ${sec.mode === 'single-row' ? `
+            <div class="form-row">
+              ${sec.fields.map(f => renderField(f, 'sec' + idx)).join('')}
+            </div>
+          ` : ''}
+          ${sec.mode === 'multi-row' ? `
+            <div class="multi-row-table">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th class="row-num">#</th>
+                    ${sec.rowFields.map(f => `
+                      <th style="${f.width ? `width:${f.width}px;min-width:${f.width}px` : ''}">
+                        ${f.required ? '<span class="text-danger">*</span> ' : ''}${f.name}
+                        ${f.unit ? ` <span class="text-3" style="font-size:11px;font-weight:400">(${f.unit})</span>` : ''}
+                      </th>
+                    `).join('')}
+                    <th style="width:80px;text-align:right">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${(state.sectionRows[idx] || [{}]).map((row, ri) => `
+                    <tr>
+                      <td class="row-num">${ri + 1}</td>
+                      ${sec.rowFields.map(f => `<td>${renderRowCell(f, row, ri)}</td>`).join('')}
+                      <td style="text-align:right">
+                        ${(state.sectionRows[idx] || [{}]).length > 1 ?
+                          `<button class="btn-text danger btn-sm" onclick="removeSecRow(${idx}, ${ri})">删除</button>` : ''}
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          ` : ''}
+        </div>
+      `).join('');
+    }
+
+    window.addRow = function () { state.rows.push({}); render(); };
+    window.removeRow = function (i) { state.rows.splice(i, 1); render(); };
+    window.addSecRow = function (idx) {
+      if (!state.sectionRows[idx]) state.sectionRows[idx] = [];
+      state.sectionRows[idx].push({});
+      render();
+    };
+    window.removeSecRow = function (idx, ri) {
+      state.sectionRows[idx].splice(ri, 1);
+      render();
+    };
+
+    window.onSave = function (mode) {
+      if (mode === 'draft') { toast('草稿已保存', 'success'); }
+      else {
+        toast('已正式提交，等待班组长审核', 'success');
+        setTimeout(() => location.href = './list.html', 800);
+      }
+    };
+
+    render();
+  </script>
+</body>
+</html>

@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <title>发酵生产记录 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script>
+    const page = renderLayout({
+      activeKey: 'fm-production',
+      breadcrumb: [{ label: '业务工作' }, { label: '发酵记录' }, { label: '发酵生产记录' }]
+    });
+
+    const list = MOCK.fermentationList.filter(r => r.type === '发酵生产记录');
+
+    page.innerHTML = `
+      <div class="query-card">
+        <div class="query-fields">
+          <span class="query-field">
+            <label>培养级别</label>
+            <select>
+              <option>全部规格</option>
+              <option>100mL摇瓶</option><option>20L种子罐</option>
+              <option>200L种子罐</option><option>2000L种子罐</option><option>20KL发酵罐</option>
+            </select>
+          </span>
+          <span class="query-field q-w-range">
+            <label>日期范围</label>
+            <input type="date" value="2026-05-01" />
+            <span class="date-sep">至</span>
+            <input type="date" value="2026-05-07" />
+          </span>
+          <span class="query-field q-w-md">
+            <label>批次号</label>
+            <input type="text" placeholder="请输入" />
+          </span>
+          <span class="query-field">
+            <label>状态</label>
+            <select><option>全部状态</option><option>草稿</option><option>已提交</option><option>已审核</option></select>
+          </span>
+        </div>
+        <div class="query-actions">
+          <button class="btn">重置</button>
+          <button class="btn btn-primary">查询</button>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-toolbar">
+          <span class="table-toolbar-left">共 ${list.length} 条</span>
+          <div class="table-toolbar-right">
+            <button class="btn" onclick="toast('配置列表字段')">配置列表字段</button>
+            <button class="btn btn-primary" onclick="location.href='./production-new.html'">新增</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>单据编号</th>
+                <th>培养级别</th>
+                <th>批次号</th>
+                <th>过程行数</th>
+                <th>日期</th>
+                <th>创建人</th>
+                <th>状态</th>
+                <th class="col-actions">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${list.map(r => `
+                <tr>
+                  <td><a class="text-primary fw-500" href="./production-new.html?id=${r.id}&view=1">${r.id}</a></td>
+                  <td>${r.level}</td>
+                  <td>${r.batch}</td>
+                  <td>${r.rows} 行</td>
+                  <td>${r.date}</td>
+                  <td>${r.creator}</td>
+                  <td>${statusTag(r.status)}</td>
+                  <td class="col-actions">
+                    <button class="btn-text" onclick="location.href='./production-new.html?id=${r.id}&view=1'">查看</button>
+                    ${(r.status === 'draft' || r.status === 'rejected') ? `<button class="btn-text" onclick="location.href='./production-new.html?id=${r.id}&edit=1'">编辑</button>` : ''}
+                    ${(r.status === 'draft' || r.status === 'rejected') ? `<button class="btn-text danger" onclick="confirmDel('${r.id}')">删除</button>` : ''}
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+        <div class="pagination-v2">
+          <span class="pagination-total">共 ${list.length} 条</span>
+          <select class="pagination-size"><option>100条/页</option><option>200条/页</option><option>300条/页</option><option>400条/页</option></select>
+          <button disabled>«</button><button disabled>‹</button><button class="active">1</button><button>›</button><button>»</button>
+          <span class="pagination-jumper">跳至 <input type="number" min="1" value="1" /> 页</span>
+        </div>
+      </div>
+
+      <div class="card" style="border-left:4px solid var(--info)">
+        <div style="font-weight:500;margin-bottom:6px;color:var(--info)">💡 生产记录说明</div>
+        <div class="text-2" style="line-height:1.7;font-size:13px">
+          • 生产记录由"初始培养条件"+"过程时序记录（多行）"两部分组成<br/>
+          • 不同规格适用的字段不同：DO/温度仅适用于20L及以上；酶活仅适用于100mL摇瓶/20KL发酵罐<br/>
+          • <b>温度、压力</b>等字段支持 SCADA 自动回填，可手动覆盖
+        </div>
+      </div>
+    `;
+    window.confirmDel = (id) => confirmDialog('删除生产记录', `确认删除 <b>${id}</b>？`, () => toast('已删除', 'success'));
+  </script>
+</body>
+</html>

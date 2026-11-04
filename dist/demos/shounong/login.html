@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>登录 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="./assets/css/main.css" />
+</head>
+<body class="login-page">
+  <div class="login-card">
+    <div class="login-hero">
+      <div class="login-hero-logo">
+        <span style="width:36px;height:36px;border-radius:8px;background:linear-gradient(135deg,#4096ff,#1677ff);display:inline-flex;align-items:center;justify-content:center;font-weight:700">阿</span>
+        <span>阿洛酮糖生产平台</span>
+      </div>
+      <div>
+        <div class="login-hero-title">让每一张<br/>纸质单据<br/>完成数字化迁移</div>
+        <div class="login-hero-desc">基于 SCADA 数据回填、可配置质检模板、字段级操作追溯，构建可靠的生产质量底座。</div>
+      </div>
+      <div class="login-hero-meta">
+        © 2026 阿洛酮糖生产管理平台 · V1.5 · 让数据可信、让流程可追溯
+      </div>
+    </div>
+    <div class="login-form">
+      <h2>账号登录</h2>
+      <div class="sub">请使用工号或用户名登录系统</div>
+      <form id="login-form" onsubmit="return doLogin(event)">
+        <div class="form-item">
+          <label class="form-label">用户名 / 工号</label>
+          <input id="username" type="text" placeholder="请输入用户名" autocomplete="username" />
+        </div>
+        <div class="form-item">
+          <label class="form-label">密码</label>
+          <input id="password" type="password" placeholder="请输入密码" autocomplete="current-password" />
+        </div>
+        <div class="options">
+          <label><input type="checkbox" /> 记住登录状态（30分钟内）</label>
+          <a href="#">忘记密码？</a>
+        </div>
+        <button type="submit" class="login-btn">登 录</button>
+      </form>
+      <div class="quick-login">
+        快速以下方角色体验：
+        <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;justify-content:center">
+          <button onclick="quickLogin('王尚革','系统管理员')">系统管理员</button>
+          <button onclick="quickLogin('张三','操作人员（发酵工段）')">发酵工段</button>
+          <button onclick="quickLogin('李四','操作人员（中间体1）')">中间体检验</button>
+          <button onclick="quickLogin('王五','质检科人员')">质检科</button>
+          <button onclick="quickLogin('赵六','班组长')">班组长</button>
+          <button onclick="quickLogin('刘七','生产管理人员')">生产管理</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function doLogin(e) {
+      e.preventDefault();
+      const u = document.getElementById('username').value.trim();
+      if (!u) { alert('请输入用户名'); return false; }
+      localStorage.setItem('userName', u);
+      localStorage.setItem('role', '系统管理员');
+      location.href = './index.html';
+      return false;
+    }
+    function quickLogin(name, role) {
+      localStorage.setItem('userName', name);
+      localStorage.setItem('role', role);
+      location.href = './index.html';
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>原始记录详情 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const id = params.get('id') || 'REC-20260507-0510';
+    const data = MOCK.recordList.find(x => x.id === id) || MOCK.recordList[1];
+    const role = localStorage.getItem('role') || '系统管理员';
+    const canShowDiff = ['班组长', '生产管理人员', '系统管理员'].includes(role);
+    const canEdit = (data.status === 'draft' || data.status === 'rejected');
+
+    const page = renderLayout({
+      activeKey: 'records-all',
+      breadcrumb: [
+        { label: '业务工作' },
+        { label: '原始记录表' },
+        { label: '原始记录表', href: './list.html' },
+        { label: id }
+      ]
+    });
+
+    // 模拟时序型多行数据
+    const headers = ['时间', '温度（℃）', '罐压（MPa）', '空气流量', 'PH', 'OD', '操作员'];
+    const rows = [
+      ['08:00', '32.1', '0.045', '850', '7.0', '0.32', '张三'],
+      ['09:00', '32.5', '0.045', '850', '7.0', '0.40', '张三'],
+      ['10:00', '32.8', '0.045', '852', '6.95', '0.45', '张三'],
+      ['11:00', '32.7', '0.046', '850', '6.92', '0.51', '张三'],
+      ['12:00', '32.5', '0.045', '848', '6.88', '0.55', '张三'],
+      ['13:00', '32.3', '0.045', '850', '6.85', '0.58', '张三'],
+      ['14:00', '32.0', '0.044', '850', '6.82', '0.60', '张三'],
+      ['15:00', '31.8', '0.044', '848', '6.80', '0.62', '张三']
+    ];
+    // SCADA回填字段标记（列索引）
+    const scadaCols = [1, 2, 3];
+
+    page.innerHTML = `
+      ${data.status === 'rejected' ? `
+        <div class="card" style="border-left:4px solid var(--danger)">
+          <div style="color:var(--danger);font-weight:500;margin-bottom:6px">✕ 已被审核驳回</div>
+          <div class="text-2">驳回原因：${data.rejectReason || '—'}</div>
+        </div>` : ''}
+
+      <div class="card">
+        <div class="card-header"><div class="card-title">基础信息</div></div>
+        <div class="detail-meta">
+          <div class="detail-meta-item"><div class="lbl">单据编号</div><div class="val">${data.id}</div></div>
+          <div class="detail-meta-item"><div class="lbl">记录类型</div><div class="val">${data.type}</div></div>
+          <div class="detail-meta-item"><div class="lbl">工序 / 设备</div><div class="val">${data.process}</div></div>
+          <div class="detail-meta-item"><div class="lbl">日期</div><div class="val">${data.date}</div></div>
+          <div class="detail-meta-item"><div class="lbl">班次 / 班组</div><div class="val">${data.shift} / ${data.team}</div></div>
+          <div class="detail-meta-item"><div class="lbl">SCADA回填</div><div class="val">${data.scada ? '✅ 含SCADA字段' : '— 全手动录入'}</div></div>
+          <div class="detail-meta-item"><div class="lbl">记录行数</div><div class="val">${data.rows} 行</div></div>
+          <div class="detail-meta-item"><div class="lbl">创建人</div><div class="val">${data.creator}</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">过程数据 <span class="text-3" style="font-weight:400;font-size:12px">（按时间序列，蓝色标签字段为 SCADA 自动回填）</span></div>
+        </div>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                ${headers.map((h, i) => `<th>${h}${scadaCols.includes(i) && data.scada ? ' <span class="scada-badge">⚡ SCADA</span>' : ''}</th>`).join('')}
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.map(r => `<tr>${r.map((c, i) => `<td>${scadaCols.includes(i) && data.scada ? `<span style="color:var(--info);font-weight:500">${c}</span>` : c}</td>`).join('')}</tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+        <div class="text-3" style="font-size:12px;margin-top:10px">
+          💡 SCADA 字段允许操作人手动覆盖，覆盖后操作记录中标记为"SCADA回填→手动修改"。SCADA 不可用时该字段留空，不阻断提交。
+        </div>
+      </div>
+
+      <!-- 操作记录区块 -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">📜 操作记录 <span class="text-3" style="font-weight:400;font-size:12px">（嵌入式审计追溯）</span></div>
+        </div>
+        <ul class="oplog-list">
+          ${MOCK.oplog.map((op, idx) => {
+            const isEdit = op.type === 'edit';
+            const className = op.action.includes('创建') ? 'create' :
+                              op.action.includes('提交') ? 'submit' :
+                              op.action.includes('审核') ? 'review' :
+                              op.action.includes('驳回') ? 'reject' : '';
+            return `
+              <li class="oplog-item ${className}">
+                <div class="oplog-head">
+                  <span class="time">${op.time}</span>
+                  <span class="user">${op.user}${op.user === 'SCADA系统' ? ' <span class="scada-badge">SCADA</span>' : ''}</span>
+                  <span class="action">· ${op.action}</span>
+                  ${isEdit && op.diff ? `<span class="summary">修改了 ${op.diff.length} 个字段</span>` : ''}
+                  ${isEdit && op.diff && canShowDiff ? `<span class="toggle" onclick="toggleDiff(${idx})">展开 ▾</span>` : ''}
+                </div>
+                ${isEdit && op.diff && canShowDiff ? `
+                  <div class="oplog-detail" id="diff-${idx}">
+                    ${op.diff.map(d => `
+                      <div class="oplog-diff-row">
+                        <span class="field">${d.field}</span>
+                        <span class="old">${d.old}</span>
+                        <span class="arrow">→</span>
+                        <span class="new">${d.new}</span>
+                      </div>
+                    `).join('')}
+                  </div>` : ''}
+              </li>
+            `;
+          }).join('')}
+        </ul>
+      </div>
+    `;
+
+    window.toggleDiff = function (idx) {
+      const el = document.getElementById('diff-' + idx);
+      if (el) el.classList.toggle('open');
+    };
+    window.confirmDel = function () {
+      confirmDialog('删除记录', `已审核状态的记录不允许删除。当前状态：${data.status}`, () => {});
+    };
+  </script>
+</body>
+</html>

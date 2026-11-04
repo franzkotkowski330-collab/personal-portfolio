@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <title>班组管理 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script>
+    const page = renderLayout({
+      activeKey: 'basic-teams',
+      breadcrumb: [{ label: '基础数据管理' }, { label: '班组管理' }]
+    });
+    page.innerHTML = `
+      <div class="card">
+        <div class="flex-between mb-12">
+          <div class="text-2">维护班组（甲/乙/丙班）</div>
+          <button class="btn btn-primary">+ 新增班组</button>
+        </div>
+        <table class="table">
+          <thead><tr><th>班组名称</th><th>编码</th><th>说明</th><th>排序</th><th>启用</th><th class="col-actions">操作</th></tr></thead>
+          <tbody>
+            ${(MOCK.teams || []).map(s => `
+              <tr>
+                <td><a class="text-primary fw-500" href="team-detail.html?code=${encodeURIComponent(s.code)}">${s.name}</a></td>
+                <td>${s.code}</td><td>${s.desc}</td><td>${s.sort}</td>
+                <td><div class="switch ${s.enabled ? 'on' : ''}"></div></td>
+                <td class="col-actions">
+                  <button class="btn-text" onclick="location.href='team-detail.html?code=${encodeURIComponent(s.code)}'">查看</button>
+                  <button class="btn-text">编辑</button>
+                </td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+`;
+  </script>
+</body>
+</html>

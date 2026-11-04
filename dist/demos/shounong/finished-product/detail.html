@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>成品检验记录详情 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+  <style>
+    .fp-metal-table td { vertical-align: middle; }
+    .fp-metal-caption { padding: 0 16px 12px; font-size: 12px; color: var(--text-3); }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const id = params.get('id');
+    const row = MOCK.finishedProductInspectionList.find(r => r.id === id);
+
+    const page = renderLayout({
+      activeKey: 'fp-record-list',
+      breadcrumb: [
+        { label: '业务工作' },
+        { label: '成品检验' },
+        { label: '成品检验记录' },
+        { label: id || '详情' }
+      ]
+    });
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, s => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[s]));
+    }
+
+    function tick(v) {
+      return v ? '<span style="color:var(--success);font-weight:700">✓</span>' : '<span style="color:var(--danger);font-weight:700">✗</span>';
+    }
+
+    if (!row) {
+      page.innerHTML = ``;
+    } else {
+      const link = row.linkedReport && row.linkedReport !== '—' && row.linkedReport.startsWith('FPR-')
+        ? `<a class="text-primary" href="./day-report-detail.html?id=${encodeURIComponent(row.linkedReport)}">${escapeHtml(row.linkedReport)}</a>`
+        : escapeHtml(row.linkedReport || '—');
+      page.innerHTML = `
+
+        <div class="card">
+          <div class="detail-meta" style="padding:16px">
+            <div class="detail-meta-item"><div class="lbl">检验时间</div><div class="val">${escapeHtml(row.inspectTime)}</div></div>
+            <div class="detail-meta-item"><div class="lbl">检验结果</div><div class="val">${row.inspectResult === '正常' ? '<span class="tag tag-green">✓ 正常</span>' : '<span class="tag tag-red">✗ 异常</span>'}</div></div>
+            <div class="detail-meta-item"><div class="lbl">状态</div><div class="val">${escapeHtml(row.status)}</div></div>
+            <div class="detail-meta-item"><div class="lbl">检验人</div><div class="val">${escapeHtml(row.inspector)}</div></div>
+            <div class="detail-meta-item"><div class="lbl">关联检验报告</div><div class="val">${link}</div></div>
+            <div class="detail-meta-item"><div class="lbl">创建人 / 时间</div><div class="val">${escapeHtml(row.creator)} · ${escapeHtml(row.createdAt)}</div></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><div class="card-title">检验明细（金探）</div></div>
+          <div class="fp-metal-caption">与新增/编辑页同一表格列结构；只读展示。</div>
+          <div class="table-wrap" style="padding:0 16px 16px">
+            <table class="table fp-metal-table">
+              <thead>
+                <tr>
+                  <th>铁（Fe）1.5mm</th>
+                  <th>不锈钢（Sus）</th>
+                  <th>NO11-Fe2.0mm</th>
+                  <th>产品检验数量/袋</th>
+                  <th>产品通过数量/袋</th>
+                  <th>异常描述</th>
+                  <th>纠偏</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>${tick(row.fe15)}</td>
+                  <td>${tick(row.sus)}</td>
+                  <td>${tick(row.no11)}</td>
+                  <td>${escapeHtml(String(row.totalBags))}</td>
+                  <td>${escapeHtml(String(row.passBags))}</td>
+                  <td class="text-2" style="vertical-align:top;max-width:220px">${escapeHtml(row.abnormal || '—')}</td>
+                  <td class="text-2" style="vertical-align:top;max-width:220px">${escapeHtml(row.correction || '—')}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }
+  </script>
+</body>
+</html>

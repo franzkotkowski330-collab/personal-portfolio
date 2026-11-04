@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>门户首页 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="./assets/css/main.css" />
+</head>
+<body>
+  <div id="app"></div>
+
+  <script src="./assets/js/menu.js"></script>
+  <script src="./assets/js/mock.js"></script>
+  <script src="./assets/js/layout.js"></script>
+  <script>
+    const page = renderLayout({
+      activeKey: 'home',
+      breadcrumb: [{ label: '首页' }, { label: '门户首页' }]
+    });
+
+    const userName = localStorage.getItem('userName') || '王尚革';
+    const role = localStorage.getItem('role') || '系统管理员';
+    const todayStr = '2026年5月7日 星期四';
+
+    page.innerHTML = `
+      <!-- 欢迎横幅 -->
+      <div class="welcome-banner">
+        <div class="welcome-banner-greet">📣 你好，${userName}，欢迎回到阿洛酮糖生产管理平台</div>
+        <div class="welcome-banner-meta">${todayStr} · 今天有 4 项待办 · 2 条高优级事项 · 3 条系统主动提醒</div>
+      </div>
+
+      <div class="home-grid">
+        <!-- 左主区 -->
+        <div>
+          <!-- AI 数字员工卡片 -->
+          <div class="assistant-card">
+            <div class="assistant-icon">🤖</div>
+            <div class="assistant-content">
+              <div class="assistant-title">小阿 · 数字员工 <span class="badge">Beta</span></div>
+              <div class="assistant-desc">一句话发起质检/原始记录录入、批量提交、操作记录追溯、超规格告警等动作</div>
+            </div>
+            <div class="assistant-actions">
+              <span class="assistant-action">⏱ 还有几条记录没提交？</span>
+              <span class="assistant-action">📑 我有几条待办？</span>
+              <span class="assistant-action">📊 今天哪个工序质检最多？</span>
+              <span class="assistant-action primary">🎙 语音/对话唤起</span>
+            </div>
+          </div>
+
+          <!-- 应用中心 -->
+          <div class="section-title">
+            <div class="left">${ICONS.apps} 应用中心</div>
+            <div class="right">共 8 个子系统 · 点击进入</div>
+          </div>
+          <div class="app-grid">
+            <a class="app-card" href="./quality/list.html?type=im1">
+              <div class="app-card-icon c1">🧪</div>
+              <div class="app-card-title">工序检验 <span class="star">★</span></div>
+              <div class="app-card-desc">中间体检验、质检科检验等线上录入、列表筛选、查看、编辑与字段级追溯</div>
+              <div class="app-card-meta"><span>质量管理</span><span>📅 V1.5</span></div>
+            </a>
+            <a class="app-card" href="./quality/inspection-record-report.html">
+              <div class="app-card-icon c1">📑</div>
+              <div class="app-card-title">检验记录表</div>
+              <div class="app-card-desc">由工序检验数据按工序、检验项目、测定值汇总；支持筛选与导出</div>
+              <div class="app-card-meta"><span>质量管理</span><span>📅 V1.5+</span></div>
+            </a>
+            <a class="app-card" href="./records/list.html">
+              <div class="app-card-icon c2">📋</div>
+              <div class="app-card-title">原始记录表管理 <span class="star">★</span></div>
+              <div class="app-card-desc">17类工序原始记录线上化，SCADA数据自动回填，时序型多行录入</div>
+              <div class="app-card-meta"><span>生产记录</span><span>📅 V1.5</span></div>
+            </a>
+            <a class="app-card" href="./fermentation/recipe-list.html">
+              <div class="app-card-icon c3">🧫</div>
+              <div class="app-card-title">发酵配料表</div>
+              <div class="app-card-desc">5种培养级别的发酵培养基配料明细管理</div>
+              <div class="app-card-meta"><span>发酵车间</span><span>📅 V1.5</span></div>
+            </a>
+            <a class="app-card" href="./fermentation/production-list.html">
+              <div class="app-card-icon c3">🧬</div>
+              <div class="app-card-title">发酵生产记录 <span class="star">★</span></div>
+              <div class="app-card-desc">100mL/20L/200L/2000L/20KL 五规格培养过程时序记录</div>
+              <div class="app-card-meta"><span>发酵车间</span><span>📅 V1.5</span></div>
+            </a>
+            <a class="app-card" href="./shift-report/auxiliary-list.html">
+              <div class="app-card-icon c4">📊</div>
+              <div class="app-card-title">辅料班报表</div>
+              <div class="app-card-desc">8种辅料 + 3种原料 + 5种动力的每班次消耗汇总</div>
+              <div class="app-card-meta"><span>班组管理</span><span>📅 V1.5</span></div>
+            </a>
+            <a class="app-card" href="./shift-report/fermentation-list.html">
+              <div class="app-card-icon c4">📈</div>
+              <div class="app-card-title">发酵班报表</div>
+              <div class="app-card-desc">23种发酵专用辅料每班次消耗汇总（培养基/营养盐/微量元素）</div>
+              <div class="app-card-meta"><span>班组管理</span><span>📅 V1.5</span></div>
+            </a>
+            <a class="app-card" href="./basic-data/index.html">
+              <div class="app-card-icon c5">🗃️</div>
+              <div class="app-card-title">基础数据管理</div>
+              <div class="app-card-desc">班次/班组/工序/设备/单位/字典/检验项目 7类基础数据</div>
+              <div class="app-card-meta"><span>系统底座</span><span>📅 V1.3+</span></div>
+            </a>
+            <a class="app-card" href="./system/template-config.html">
+              <div class="app-card-icon c6">📐</div>
+              <div class="app-card-title">质检模板配置</div>
+              <div class="app-card-desc">配置检验项目的规格上下限、标准描述，驱动质检表单展示</div>
+              <div class="app-card-meta"><span>配置中心</span><span>📅 V1.2+</span></div>
+            </a>
+            <a class="app-card" href="./system/users.html">
+              <div class="app-card-icon c7">👥</div>
+              <div class="app-card-title">系统管理</div>
+              <div class="app-card-desc">用户、角色、组织、SCADA点位映射的全方位管理</div>
+              <div class="app-card-meta"><span>系统管理</span><span>📅 V1.4</span></div>
+            </a>
+          </div>
+        </div>
+
+        <!-- 右侧 -->
+        <div>
+          <div class="todo-card">
+            <div class="todo-card-header">
+              <div>我的待办 <span class="badge">${MOCK.todos.length}</span></div>
+              <div class="more">全部 →</div>
+            </div>
+            <ul class="todo-list">
+              ${MOCK.todos.map(t => `
+                <li class="todo-item">
+                  <span class="priority ${t.priority}">${t.priority === 'high' ? '高' : t.priority === 'medium' ? '中' : '低'}</span>
+                  <div class="todo-content">
+                    <div class="todo-title">${t.title}</div>
+                    <div class="todo-meta">${t.meta}</div>
+                  </div>
+                </li>
+              `).join('')}
+            </ul>
+          </div>
+
+          <div class="todo-card">
+            <div class="todo-card-header">
+              <div>最新通知</div>
+              <div class="more">更多 →</div>
+            </div>
+            <ul class="todo-list">
+              ${MOCK.notices.map(n => `
+                <li class="todo-item">
+                  <div class="todo-content">
+                    <div class="todo-title">${n.title}</div>
+                    <div class="todo-meta">${n.date}</div>
+                  </div>
+                </li>
+              `).join('')}
+            </ul>
+          </div>
+        </div>
+      </div>
+    `;
+  </script>
+</body>
+</html>

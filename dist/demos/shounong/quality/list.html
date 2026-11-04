@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>质检数据列表 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const type = params.get('type') || 'im1';
+    const TYPE_MAP = {
+      fermentation: { key: 'quality-list', label: '发酵工段质检', desc: '按需录入：单工序+单设备，每次记录该设备当日的检验次序' },
+      im1: { key: 'quality-list-im1', label: '中间体检验', desc: '列表字段与查询规则见《中间体检验》：记录编号、取样时间（与新建页「取样时间」一致）、班次、班组、检验工序分组（与新建页「检验工序分组」一致）、检验结果（全部合格为✓，任一项异常为✕）、检测人、创建人、创建时间等；支持「配置列表字段」自定义列与排序。' },
+      im2: { key: 'quality-list-im2', label: '中间体2质检', desc: '果糖来料/果糖色谱/阿糖异构等8个工序的检验项目' },
+      qc: { key: 'quality-list-qc', label: '质检科检验', desc: '按检验日期+班次记录当班所有检验记录，并支持当天班次新增检验记录' }
+    };
+    const t = TYPE_MAP[type];
+
+    const page = renderLayout({
+      activeKey: t.key,
+      breadcrumb: [{ label: '业务工作' }, { label: '工序检验' }, { label: t.label }]
+    });
+
+    const list = MOCK.qualityList.filter(x => x.type === type);
+    const im1DivisionFilterOptions = type === 'im1'
+      ? [...new Set(list.map(r => r.division).filter(Boolean))].sort()
+      : [];
+
+    function im1ResultMark(r) {
+      return r.exceedCount > 0 ? '<span class="text-danger" title="存在超规格或异常项">✕</span>' : '<span class="text-success" title="全部检验项正常">✓</span>';
+    }
+
+    const configColumnBtn = type === 'im1'
+      ? `<button type="button" class="btn" onclick="toast('打开「配置列表字段」：按用户保存列显示与顺序（见《中间体检验》文档第2节）','success')">配置列表字段</button>`
+      : `<button type="button" class="btn" onclick="toast('配置列表字段功能','success')">配置列表字段</button>`;
+
+    function im1RowHtml(r) {
+      const inspector = r.inspector || r.creator;
+      const createdAt = r.createdAt || '—';
+      const sampleTime = String(r.sampleTime || r.inspectTime || (r.date + ' 08:00')).replace('T', ' ').slice(0, 16);
+      return `
+                <tr>
+                  <td><a class="text-primary fw-500" href="./detail.html?id=${r.id}">${r.id}</a></td>
+                  <td>${sampleTime}</td>
+                  <td>${r.shift}</td>
+                  <td>${r.team}</td>
+                  <td>${r.division || '—'}</td>
+                  <td>${im1ResultMark(r)}</td>
+                  <td>${inspector}</td>
+                  <td>${r.creator}</td>
+                  <td>${createdAt}</td>
+                  <td>${statusTag(r.status)}</td>
+                  <td class="col-actions">
+                    <button class="btn-text" onclick="location.href='./detail.html?id=${r.id}'">查看</button>
+                    ${(r.status === 'draft' || r.status === 'rejected') ? `<button class="btn-text" onclick="location.href='./new.html?id=${r.id}&edit=1&type=${type}'">编辑</button>` : ''}
+                    ${(r.status === 'draft' || r.status === 'rejected') ? `<button class="btn-text danger" onclick="confirmDel('${r.id}')">删除</button>` : ''}
+                  </td>
+                </tr>`;
+    }
+
+    function im1TbodyHtml(rows) {
+      if (!rows.length) {
+        return '<tr><td colspan="11" class="text-3" style="text-align:center;padding:24px">暂无数据</td></tr>';
+      }
+      return rows.map(im1RowHtml).join('');
+    }
+
+    const tableBlock = type === 'im1' ? `
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>记录编号</th>
+                <th>取样时间</th>
+                <th>班次</th>
+                <th>班组</th>
+                <th>检验工序分组</th>
+                <th>检验结果</th>
+                <th>检测人</th>
+                <th>创建人</th>
+                <th>创建时间</th>
+                <th>状态</th>
+                <th class="col-actions">操作</th>
+              </tr>
+            </thead>
+            <tbody id="im1-tbody">${im1TbodyHtml(list)}</tbody>
+          </table>
+        </div>` : type === 'qc' ? `
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>单据编号</th>
+                <th>取样时间</th>
+                <th>检验时间</th>
+                <th>班次/班组</th>
+                <th>创建人</th>
+                <th>提交时间</th>
+                <th>状态</th>
+                <th class="col-actions">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${list.map(r => `
+                <tr>
+                  <td><a class="text-primary fw-500" href="./detail.html?id=${r.id}">${r.id}</a></td>
+                  <td>${String(r.sampleTime || '—').replace('T', ' ').slice(0, 16)}</td>
+                  <td>${String(r.inspectTime || r.date || '—').replace('T', ' ').slice(0, 16)}</td>
+                  <td>${r.shift} / ${r.team}</td>
+                  <td>${r.creator}</td>
+                  <td>${r.submitTime}</td>
+                  <td>${statusTag(r.status)}</td>
+                  <td class="col-actions">
+                    <button class="btn-text" onclick="location.href='./detail.html?id=${r.id}'">查看</button>
+                    ${(r.status === 'draft' || r.status === 'rejected') ? `<button class="btn-text" onclick="location.href='./new.html?id=${r.id}&edit=1&type=${type}'">编辑</button>` : ''}
+                    ${(r.status === 'draft' || r.status === 'rejected') ? `<button class="btn-text danger" onclick="confirmDel('${r.id}')">删除</button>` : ''}
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>` : `
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>单据编号</th>
+                <th>日期</th>
+                <th>班次/班组</th>
+                <th>工序</th>
+                <th>设备 / 次序</th>
+                <th>检验项</th>
+                <th>超规格</th>
+                <th>创建人</th>
+                <th>提交时间</th>
+                <th>状态</th>
+                <th class="col-actions">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${list.map(r => `
+                <tr>
+                  <td><a class="text-primary fw-500" href="./detail.html?id=${r.id}">${r.id}</a></td>
+                  <td>${r.date}</td>
+                  <td>${r.shift} / ${r.team}</td>
+                  <td>${r.processes.join('、')}</td>
+                  <td>${r.device} ${r.round !== '—' ? '/ ' + r.round : ''}</td>
+                  <td>${r.itemsCount} 项</td>
+                  <td>${r.exceedCount > 0 ? `<span class="tag tag-red">${r.exceedCount} 项超标</span>` : '—'}</td>
+                  <td>${r.creator}</td>
+                  <td>${r.submitTime}</td>
+                  <td>${statusTag(r.status)}</td>
+                  <td class="col-actions">
+                    <button class="btn-text" onclick="location.href='./detail.html?id=${r.id}'">查看</button>
+                    ${(r.status === 'draft' || r.status === 'rejected') ? `<button class="btn-text" onclick="location.href='./new.html?id=${r.id}&edit=1&type=${type}'">编辑</button>` : ''}
+                    ${(r.status === 'draft' || r.status === 'rejected') ? `<button class="btn-text danger" onclick="confirmDel('${r.id}')">删除</button>` : ''}
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>`;
+
+    page.innerHTML = `
+      <div class="query-card">
+        <div class="filter-bar">
+          <div class="query-fields">
+            ${type === 'im1' ? `
+            <span class="query-field q-w-range"><label>日期范围</label>
+              <input type="datetime-local" value="2026-05-01T00:00" />
+              <span class="date-sep">至</span>
+              <input type="datetime-local" value="2026-05-07T23:59" />
+            </span>` : `
+            <span class="query-field q-w-range"><label>日期范围</label>
+              <input type="date" value="2026-05-01" />
+              <span class="date-sep">至</span>
+              <input type="date" value="2026-05-07" />
+            </span>`}
+            <span class="query-field"><label>班次</label>
+              <select><option>全部班次</option><option>白班</option><option>夜班</option></select>
+            </span>
+            <span class="query-field"><label>班组</label>
+              <select><option>全部班组</option><option>甲班</option><option>乙班</option><option>丙班</option></select>
+            </span>
+            ${type === 'im1' ? `
+            <span class="query-field"><label>检验工序分组</label>
+              <select id="filter-division">
+                <option value="">全部检验工序分组</option>
+                ${im1DivisionFilterOptions.map(d => `<option value="${d}">${d}</option>`).join('')}
+              </select>
+            </span>` : ''}
+            <span class="query-field"><label>状态</label>
+              <select>
+                <option>全部状态</option>
+                <option>草稿</option><option>已提交</option><option>已审核</option><option>被驳回</option>
+              </select>
+            </span>
+            <span class="query-field q-w-md"><label>记录编号</label>
+              <input type="text" placeholder="请输入记录编号" />
+            </span>
+          </div>
+          <div class="query-actions">
+            <button class="btn">重置</button>
+            <button class="btn btn-primary">查询</button>
+          </div>
+        </div>
+      </div>
+      <div class="table-card">
+        <div class="table-toolbar">
+          <div class="table-toolbar-right">
+            <button class="btn">&#x2B13; 导出</button>
+            ${configColumnBtn}
+            <button class="btn btn-primary" onclick="location.href='./new.html?type=${type}&entry=${type === 'qc' ? 'shift' : ''}'">新增</button>
+          </div>
+        </div>
+        ${tableBlock}
+        <div class="pagination-v2">
+          <span class="pagination-total" id="list-total">共 ${list.length} 条</span>
+          <select class="pagination-size"><option>100条/页</option><option>200条/页</option><option>300条/页</option><option>400条/页</option></select>
+          <button disabled>&laquo;</button><button disabled>&lsaquo;</button><button class="active">1</button><button>&rsaquo;</button><button>&raquo;</button>
+          <span class="pagination-jumper">跳至 <input type="number" min="1" value="1" /> 页</span>
+        </div>
+      </div>
+    `;
+
+    function confirmDel(id) {
+      confirmDialog('删除质检单', `确定删除单据 <b>${id}</b>？删除后单据进入回收站，操作记录仍保留。`, () => {
+        toast('已删除', 'success');
+      });
+    }
+    window.confirmDel = confirmDel;
+
+    if (type === 'im1') {
+      const sel = document.getElementById('filter-division');
+      const tbody = document.getElementById('im1-tbody');
+      const totalEl = document.getElementById('list-total');
+      function applyIm1DivisionFilter() {
+        const v = (sel && sel.value) || '';
+        const filtered = v ? list.filter(r => r.division === v) : list;
+        if (tbody) tbody.innerHTML = im1TbodyHtml(filtered);
+        if (totalEl) totalEl.textContent = '共 ' + filtered.length + ' 条';
+      }
+      if (sel) sel.addEventListener('change', applyIm1DivisionFilter);
+    }
+  </script>
+</body>
+</html>

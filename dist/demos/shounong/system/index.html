@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <title>系统管理 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script>
+    const page = renderLayout({
+      activeKey: 'sys-home',
+      breadcrumb: [{ label: '系统管理' }, { label: '模块导航' }]
+    });
+
+    const modules = [
+      { title: '登录', desc: '账号密码登录、角色体验、会话与锁定策略演示', href: 'login.html', icon: '🔐', tag: '入口' },
+      { title: '用户管理', desc: '账号创建、角色与组织分配、启停用、重置密码', href: 'users.html', icon: '👤', tag: 'P0' },
+      { title: '角色管理', desc: '7个内置角色 + 自定义角色，功能模块×操作权限矩阵', href: 'roles.html', icon: '🛡️', tag: 'P0' },
+      { title: '组织管理', desc: '公司/部门/车间/班组树形结构，驱动数据可见范围', href: 'organizations.html', icon: '🏢', tag: 'P0' },
+      { title: '质检模板配置', desc: '四类质检表单检验项目、规格上下限、标准描述', href: 'template-config.html', icon: '📋', tag: 'P0' },
+      { title: 'SCADA点位映射', desc: 'SCADA点位与原始记录表字段映射，驱动自动回填', href: 'scada-mapping.html', icon: '⚡', tag: 'P0' },
+      { title: '系统配置', desc: '会话超时、密码策略、登录安全等全局参数', href: 'system-config.html', icon: '⚙️', tag: 'P0' },
+      { title: '修改密码', desc: '首次登录强制改密、密码强度校验', href: 'change-password.html', icon: '🔑', tag: '流程' }
+    ];
+
+    page.innerHTML = `
+      <div class="card" style="background:var(--primary-light);border-left:4px solid var(--primary);margin-bottom:16px">
+        <div style="font-weight:500;margin-bottom:6px">仅系统管理员可访问</div>
+        <div class="text-2" style="font-size:13px;line-height:1.7">
+          本目录下均为独立 <b>.html</b> 静态页面，无构建依赖。点击右上角头像可切换角色体验权限差异。
+          登录入口：<a href="login.html">system/login.html</a> 或 <a href="../login.html">prototype/login.html</a>
+        </div>
+      </div>
+
+      <div class="app-grid" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr))">
+        ${modules.map(m => `
+          <a class="app-card" href="${m.href}" style="text-decoration:none;color:inherit">
+            <div class="app-card-icon" style="font-size:28px">${m.icon}</div>
+            <div class="app-card-title">${m.title} <span class="tag tag-blue" style="margin-left:6px;font-size:11px">${m.tag}</span></div>
+            <div class="app-card-desc">${m.desc}</div>
+          </a>
+        `).join('')}
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <div class="card-header"><div class="card-title">HTML 文件清单</div></div>
+        <table class="table">
+          <thead><tr><th>文件</th><th>对应 PRD</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td><code>login.html</code></td><td>3.8.2 登录</td><td>账号密码、快速角色体验</td></tr>
+            <tr><td><code>change-password.html</code></td><td>3.8.2 密码策略</td><td>首次登录 / 强制改密</td></tr>
+            <tr><td><code>users.html</code></td><td>3.8.3 用户管理</td><td>用户列表与新增编辑</td></tr>
+            <tr><td><code>roles.html</code></td><td>3.8.4 角色管理</td><td>内置角色与权限矩阵</td></tr>
+            <tr><td><code>organizations.html</code></td><td>3.8.5 组织管理</td><td>组织树维护</td></tr>
+            <tr><td><code>template-config.html</code></td><td>3.6 质检模板配置</td><td>检验项目规格配置</td></tr>
+            <tr><td><code>scada-mapping.html</code></td><td>SCADA 映射</td><td>点位与表单字段绑定</td></tr>
+            <tr><td><code>system-config.html</code></td><td>系统配置权限项</td><td>会话、密码、登录安全</td></tr>
+          </tbody>
+        </table>
+      </div>
+    `;
+  </script>
+</body>
+</html>

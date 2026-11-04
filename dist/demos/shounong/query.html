@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <title>跨模块数据查询 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="./assets/css/main.css" />
+</head>
+<body>
+  <div id="app"></div>
+  <script src="./assets/js/menu.js"></script>
+  <script src="./assets/js/mock.js"></script>
+  <script src="./assets/js/layout.js"></script>
+  <script>
+    const page = renderLayout({
+      activeKey: 'query',
+      breadcrumb: [{ label: '数据&配置' }, { label: '跨模块数据查询' }]
+    });
+
+    const all = [
+      ...MOCK.qualityList.map(x => ({ id: x.id, type: x.typeLabel, ...x })),
+      ...MOCK.recordList.map(x => ({ id: x.id, type: x.type + '原始记录', date: x.date, shift: x.shift, team: x.team, process: x.process, creator: x.creator, submitTime: x.submitTime || '—', status: x.status })),
+      ...MOCK.shiftList.map(x => ({ id: x.id, type: x.type, date: x.date, shift: x.shift, team: x.team, process: '—', creator: x.creator, submitTime: '—', status: x.status }))
+    ];
+
+    page.innerHTML = `
+      <div class="card">
+        <div class="filter-bar">
+          <span class="query-field"><label>单据类型</label><select>
+            <option>全部单据类型</option>
+            <option>4类质检单</option>
+            <option>17类原始记录</option>
+            <option>发酵记录</option>
+            <option>班报表</option>
+          </select></span>
+          <span class="query-field q-w-range"><label>日期范围</label><input type="date" value="2026-05-01" /><span class="date-sep">至</span><input type="date" value="2026-05-07" /></span>
+          <span class="query-field"><label>班次</label><select><option>全部班次</option><option>白班</option><option>夜班</option></select></span>
+          <span class="query-field"><label>班组</label><select><option>全部班组</option><option>甲</option><option>乙</option><option>丙</option></select></span>
+          <span class="query-field"><label>工序</label><select><option>全部工序</option>${MOCK.processes.map(p => `<option>${p.name}</option>`).join('')}</select></span>
+          <span class="query-field"><label>状态</label><select><option>全部状态</option><option>草稿</option><option>已提交</option><option>已审核</option><option>被驳回</option></select></span>
+          <span class="query-field q-w-md"><label>关键词</label><input type="text" placeholder="单据编号 / 创建人" /></span>
+            <span class="filter-actions">
+              <button class="btn">重置</button>
+          <button class="btn btn-primary">查询</button>
+            </span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>单据编号</th><th>单据类型</th><th>日期</th><th>班次/班组</th><th>工序</th>
+                <th>创建人</th><th>提交时间</th><th>状态</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${all.slice(0, 12).map(r => `
+                <tr>
+                  <td><a class="text-primary">${r.id}</a></td>
+                  <td>${r.type || r.typeLabel}</td>
+                  <td>${r.date}</td>
+                  <td>${r.shift} / ${r.team}</td>
+                  <td>${r.process || (r.processes ? r.processes.join('、') : '—')}</td>
+                  <td>${r.creator}</td>
+                  <td>${r.submitTime}</td>
+                  <td>${statusTag(r.status)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+        <div class="pagination-v2">
+          <span class="pagination-total">共 ${all.length} 条</span>
+          <select class="pagination-size"><option>100条/页</option><option>200条/页</option><option>300条/页</option><option>400条/页</option></select>
+          <button disabled>&laquo;</button><button disabled>&lsaquo;</button><button class="active">1</button><button>2</button><button>3</button><button>&rsaquo;</button><button>&raquo;</button>
+          <span class="pagination-jumper">跳至 <input type="number" min="1" value="1" /> 页</span>
+        </div>
+      </div>
+    `;
+  </script>
+</body>
+</html>

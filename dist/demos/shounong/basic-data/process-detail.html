@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>工序详情 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+  <link rel="stylesheet" href="../assets/css/process-stage-select.css" />
+  <style>
+    .modal { width: 560px; }
+    .log-filter-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px 12px;
+      flex-wrap: nowrap;
+      overflow: hidden;
+      min-width: 0;
+      padding: 0 0 12px;
+      margin-bottom: 12px;
+    }
+    .log-filter-bar .query-field { flex: 1 1 0; min-width: 0; }
+    .log-filter-bar .query-field.q-w-date { flex: 1.05 1 112px; min-width: 96px; }
+    .log-filter-bar .query-field.q-w-sm { flex: 0.85 1 92px; min-width: 72px; }
+    .log-filter-bar .query-field.q-w-md { flex: 1 1 108px; min-width: 72px; }
+    .log-filter-bar .query-field.q-w-lg { flex: 1.2 1 124px; min-width: 80px; }
+    .log-filter-bar .filter-actions { flex-shrink: 0; margin-left: auto; }
+    .log-table-wrap .table th { border-bottom: none; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script src="../assets/js/process-stage-select.js"></script>
+  <script>
+    const PROCESS_STORAGE_KEY = 'basicData.processes.v1';
+    const PROCESS_LOG_STORAGE_KEY = 'basicData.processLogs.v1';
+    const params = new URLSearchParams(location.search);
+    const code = params.get('code') || 'PB';
+
+    let processList = loadProcessList();
+    let processLogs = loadProcessLogs();
+    let logFilters = { time: '', user: '', actionType: '', summary: '' };
+    let logFiltersApplied = { time: '', user: '', actionType: '', summary: '' };
+
+    const page = renderLayout({
+      activeKey: 'process-management',
+      breadcrumb: [{ label: '基础数据管理' }, { label: '工序管理' }, { label: code }]
+    });
+
+    function loadProcessList() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(PROCESS_STORAGE_KEY) || 'null');
+        if (Array.isArray(saved)) return saved;
+      } catch (e) {}
+      return (MOCK.processManagementList || []).map(row => ({ ...row }));
+    }
+
+    function saveProcessList() {
+      localStorage.setItem(PROCESS_STORAGE_KEY, JSON.stringify(processList));
+    }
+
+    function loadProcessLogs() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(PROCESS_LOG_STORAGE_KEY) || '{}');
+        return { ...(MOCK.processManagementLogs || {}), ...(saved || {}) };
+      } catch (e) {
+        return { ...(MOCK.processManagementLogs || {}) };
+      }
+    }
+
+    function saveProcessLogs() {
+      localStorage.setItem(PROCESS_LOG_STORAGE_KEY, JSON.stringify(processLogs));
+    }
+
+    function currentUser() {
+      return localStorage.getItem('userName') || '王尚革';
+    }
+
+    function nowText() {
+      const d = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, s => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[s]));
+    }
+
+    function getStages() {
+      return ['发酵', '果糖色谱分离', '阿糖异构', '固体精制', '蒸发结晶', '离心烘干', '固体包装', '质检科'];
+    }
+
+    function getProcessTypes() {
+      return ['流程工序', '质检专用工序'];
+    }
+
+    function stageTag(stage) {
+      const colorMap = {
+        '发酵': 'tag-blue',
+        '果糖色谱分离': 'tag-primary',
+        '阿糖异构': 'tag-orange',
+        '固体精制': 'tag-green',
+        '蒸发结晶': 'tag-orange',
+        '离心烘干': 'tag-grey',
+        '固体包装': 'tag-red'
+      };
+      return `<span class="tag ${colorMap[stage] || 'tag-grey'}">${escapeHtml(stage)}</span>`;
+    }
+
+    function getRow() {
+      return processList.find(row => row.code === code);
+    }
+
+    function appendLog(rowCode, log) {
+      processLogs[rowCode] = processLogs[rowCode] || [];
+      processLogs[rowCode].unshift(log);
+      saveProcessLogs();
+    }
+
+    function collectDiff(oldRow, nextRow) {
+      const fields = [
+        { key: 'name', label: '工序名称' },
+        { key: 'stage', label: '工段' },
+        { key: 'processType', label: '工序类型' }
+      ];
+      return fields
+        .filter(f => oldRow[f.key] !== nextRow[f.key])
+        .map(f => ({
+          field: f.label,
+          old: f.format ? f.format(oldRow[f.key]) : oldRow[f.key],
+          new: f.format ? f.format(nextRow[f.key]) : nextRow[f.key]
+        }));
+    }
+
+    function getLogs(row) {
+      const logs = processLogs[code] || [];
+      if (logs.length) return logs;
+      if (!row) return [];
+      return [{
+        time: row.createdAt || '—',
+        user: row.creator || '—',
+        action: '创建',
+        type: 'create'
+      }];
+    }
+
+    function fuzzyMatch(text, keyword) {
+      if (!keyword) return true;
+      return String(text || '').toLowerCase().includes(keyword.trim().toLowerCase());
+    }
+
+    function formatLogSummary(op) {
+      if (op.diff && op.diff.length) {
+        return op.diff.map(d => `${d.field}: ${d.old} → ${d.new}`).join('；');
+      }
+      if (op.type === 'create' || op.action === '创建') return '创建工序';
+      if (op.type === 'delete' || op.action === '删除') return '删除工序';
+      return '—';
+    }
+
+    function matchLogActionType(op, typeFilter) {
+      if (!typeFilter) return true;
+      if (typeFilter === '创建') return op.type === 'create' || op.action === '创建';
+      if (typeFilter === '编辑保存') return op.type === 'edit' || op.action === '编辑保存';
+      if (typeFilter === '删除') return op.type === 'delete' || op.action === '删除';
+      return op.action === typeFilter;
+    }
+
+    function getFilteredLogs(row) {
+      const logs = getLogs(row);
+      const f = logFiltersApplied;
+      return logs.filter(op => {
+        const hitTime = !f.time || (op.time && op.time.startsWith(f.time));
+        const hitUser = fuzzyMatch(op.user, f.user);
+        const hitType = matchLogActionType(op, f.actionType);
+        const hitSummary = fuzzyMatch(formatLogSummary(op), f.summary);
+        return hitTime && hitUser && hitType && hitSummary;
+      });
+    }
+
+    function renderLogFilterBar() {
+      const f = logFilters;
+      return `
+        <div class="log-filter-bar">
+          <span class="query-field q-w-date"><label><b>操作时间:</b></label>
+            <input id="log-time" type="date"${f.time ? ` value="${escapeHtml(f.time)}"` : ''} />
+          </span>
+          <span class="query-field q-w-md"><label><b>操作人:</b></label>
+            <input id="log-user" type="text" value="${escapeHtml(f.user)}" />
+          </span>
+          <span class="query-field q-w-sm"><label><b>操作类型:</b></label>
+            <select id="log-actionType">
+              <option value="">全部</option>
+              <option value="创建" ${f.actionType === '创建' ? 'selected' : ''}>创建</option>
+              <option value="编辑保存" ${f.actionType === '编辑保存' ? 'selected' : ''}>编辑保存</option>
+              <option value="删除" ${f.actionType === '删除' ? 'selected' : ''}>删除</option>
+            </select>
+          </span>
+          <span class="query-field q-w-lg"><label><b>操作说明:</b></label>
+            <input id="log-summary" type="text" value="${escapeHtml(f.summary)}" />
+          </span>
+          <span class="filter-actions">
+            <button class="btn" onclick="resetLogFilters()">重置</button>
+            <button class="btn btn-primary" onclick="applyLogFilters()">查询</button>
+          </span>
+        </div>
+      `;
+    }
+
+    function renderOperationLog(row) {
+      const logs = getFilteredLogs(row);
+      return `
+        <div style="padding:0 20px 20px">
+        ${renderLogFilterBar()}
+        ${logs.length ? `
+        <div class="table-wrap log-table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>操作时间</th>
+                <th>操作人</th>
+                <th>操作类型</th>
+                <th>操作说明</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${logs.map(op => `
+                <tr>
+                  <td>${escapeHtml(op.time)}</td>
+                  <td>${escapeHtml(op.user)}</td>
+                  <td>${escapeHtml(op.action)}</td>
+                  <td>${escapeHtml(formatLogSummary(op))}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+        ` : '<div class="empty" style="padding:32px">暂无符合条件的操作记录</div>'}
+        </div>
+      `;
+    }
+
+    window.applyLogFilters = function () {
+      logFilters = {
+        time: document.getElementById('log-time').value,
+        user: document.getElementById('log-user').value,
+        actionType: document.getElementById('log-actionType').value,
+        summary: document.getElementById('log-summary').value
+      };
+      logFiltersApplied = { ...logFilters };
+      render();
+    };
+
+    window.resetLogFilters = function () {
+      logFilters = { time: '', user: '', actionType: '', summary: '' };
+      logFiltersApplied = { ...logFilters };
+      render();
+    };
+
+    function render() {
+      const row = getRow();
+      if (!row) {
+        page.innerHTML = `
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">操作记录</div>
+              <button class="btn" onclick="location.href='./processes.html'">返回</button>
+            </div>
+            ${renderOperationLog(row)}
+          </div>
+        `;
+        return;
+      }
+
+      page.innerHTML = `
+        <div class="detail-page-stack">
+          <div class="card">
+              <div class="card-header">
+                <div class="card-title">基础信息</div>
+                <div style="display:flex;gap:8px">
+                  <button class="btn btn-primary" onclick="openProcessEditor()">编辑</button>
+                  <button class="btn" onclick="location.href='./processes.html'">返回</button>
+                </div>
+              </div>
+              <div class="detail-meta">
+                <div class="detail-meta-item"><div class="lbl">工段</div><div class="val">${escapeHtml(row.stage)}</div></div>
+                <div class="detail-meta-item"><div class="lbl">工序编号</div><div class="val">${escapeHtml(row.code)}</div></div>
+                <div class="detail-meta-item"><div class="lbl">工序名称</div><div class="val">${escapeHtml(row.name)}</div></div>
+                <div class="detail-meta-item"><div class="lbl">工序类型</div><div class="val">${escapeHtml(row.processType || '流程工序')}</div></div>
+                <div class="detail-meta-item"><div class="lbl">创建时间</div><div class="val">${escapeHtml(row.createdAt || '—')}</div></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">操作记录</div>
+              </div>
+              ${renderOperationLog(row)}
+            </div>
+        </div>
+      `;
+    }
+
+    window.toggleDiff = function (idx) {
+      const el = document.getElementById('diff-' + idx);
+      if (el) el.classList.toggle('open');
+    };
+
+    window.openProcessEditor = function () {
+      const row = getRow();
+      if (!row) {
+        toast('未找到工序数据', 'error');
+        return;
+      }
+      const stages = getStages();
+      const processTypes = getProcessTypes();
+      confirmDialog(
+        '编辑工序',
+        `
+          <div class="form-row" style="grid-template-columns:1fr 1fr">
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 工段</label>
+              ${ProcessStageSelect.render({
+                rootId: 'detail-stage-search-select',
+                hiddenId: 'form-stage',
+                inputId: 'form-stage-input',
+                dropdownId: 'form-stage-dropdown',
+                loadingId: 'form-stage-loading',
+                toggleId: 'form-stage-toggle',
+                value: row.stage
+              })}
+            </div>
+            <div class="form-item">
+              <label class="form-label">工序编号</label>
+              <input id="form-code" type="text" readonly value="${escapeHtml(row.code)}" />
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 工序名称</label>
+              <input id="form-name" type="text" value="${escapeHtml(row.name)}" />
+            </div>
+            <div class="form-item">
+              <label class="form-label"><span class="required">*</span> 工序类型</label>
+              <select id="form-processType">
+                ${processTypes.map(type => `<option value="${escapeHtml(type)}" ${(row.processType || '流程工序') === type ? 'selected' : ''}>${escapeHtml(type)}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+        `,
+        () => {
+          const next = {
+            ...row,
+            name: document.getElementById('form-name').value.trim(),
+            stage: document.getElementById('form-stage').value.trim(),
+            processType: document.getElementById('form-processType').value.trim()
+          };
+          if (!next.name || !next.stage || !next.processType) {
+            toast('请填写所有必填字段', 'error');
+            return false;
+          }
+
+          // 唯一性校验
+          const duplicateName = processList.find(item => item.name === next.name && item.code !== code);
+          if (duplicateName) {
+            toast('工序名称已存在，请更换名称', 'error');
+            return false;
+          }
+
+          const diff = collectDiff(row, next);
+          const idx = processList.findIndex(item => item.code === code);
+          if (diff.length) {
+            const time = nowText();
+            const user = currentUser();
+            processList[idx] = { ...next, updatedBy: user, updatedAt: time };
+            saveProcessList();
+            appendLog(code, { time, user, action: '编辑保存', type: 'edit', diff });
+          }
+          toast(diff.length ? '已保存工序修改' : '未发现字段变更', diff.length ? 'success' : 'warning');
+          render();
+        },
+        '保存',
+        (mask) => ProcessStageSelect.init({
+          rootId: 'detail-stage-search-select',
+          hiddenId: 'form-stage',
+          inputId: 'form-stage-input',
+          dropdownId: 'form-stage-dropdown',
+          loadingId: 'form-stage-loading',
+          toggleId: 'form-stage-toggle',
+          stages,
+          value: row.stage,
+          outsideEl: mask
+        })
+      );
+    };
+
+    window.confirmDelete = function () {
+      const row = getRow();
+      if (!row) {
+        toast('未找到工序数据', 'error');
+        return;
+      }
+      confirmDialog('删除工序', `确定删除工序 <b>${escapeHtml(row.code)} - ${escapeHtml(row.name)}</b>？`, () => {
+        processList = processList.filter(item => item.code !== code);
+        saveProcessList();
+        appendLog(code, {
+          time: nowText(),
+          user: currentUser(),
+          action: '删除',
+          type: 'delete',
+          diff: [{ field: '工序', old: `${row.code} - ${row.name}`, new: '已删除' }]
+        });
+        toast('已删除工序', 'success');
+        setTimeout(() => location.href = './processes.html', 600);
+      }, '删除');
+    };
+
+    render();
+  </script>
+</body>
+</html>

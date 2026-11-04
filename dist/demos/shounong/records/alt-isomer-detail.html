@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>阿糖异构原始记录详情 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+  <style>
+    .kv-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px 24px;
+      padding: 16px;
+    }
+    .kv-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+    .kv-item .lbl { font-size: 12px; color: var(--text-3); margin-bottom: 4px; }
+    .kv-item .val { font-size: 13.5px; color: var(--text-1); font-weight: 500; word-break: break-all; }
+    .kv-item .val.weak { color: var(--text-3); font-weight: 400; }
+    .qc-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 3px 10px; background: var(--info-light); color: var(--info);
+      border-radius: 4px; font-size: 12.5px; font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const id = params.get('id');
+    const row = MOCK.altIsomerRecordList.find(r => r.id === id);
+    const role = localStorage.getItem('role') || '系统管理员';
+    const canEdit = row && (row.status === 'draft' || row.status === 'rejected');
+
+    const page = renderLayout({
+      activeKey: 'records-alt-isomer',
+      breadcrumb: [
+        { label: '业务工作' },
+        { label: '原始记录表' },
+        { label: '阿糖异构原始记录', href: './alt-isomer-list.html' },
+        { label: id || '详情' }
+      ]
+    });
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, s => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[s]));
+    }
+
+    function v(value, unit) {
+      if (value === undefined || value === null || value === '') {
+        return '<span class="val weak">—</span>';
+      }
+      return `<span class="val">${escapeHtml(value)}${unit ? ' ' + unit : ''}</span>`;
+    }
+
+    if (!row) {
+      page.innerHTML = ``;
+    } else {
+      const qcRow = row.qcLinkId ? MOCK.altIsomerQcData.find(q => q.id === row.qcLinkId) : null;
+      page.innerHTML = `
+
+        ${row.status === 'rejected' ? `
+          <div class="card" style="border-left:4px solid var(--danger)">
+            <div style="color:var(--danger);font-weight:500;margin-bottom:6px">✕ 已被审核驳回</div>
+            <div class="text-2">驳回原因：${escapeHtml(row.rejectReason || '—')}</div>
+          </div>` : ''}
+
+        <!-- 基础信息 -->
+        <div class="card">
+          <div class="card-header"><div class="card-title">基础信息</div></div>
+          <div class="kv-grid">
+            <div class="kv-item"><div class="lbl">记录编号</div>${v(row.id)}</div>
+            <div class="kv-item"><div class="lbl">日期</div>${v(row.date)}</div>
+            <div class="kv-item"><div class="lbl">班次</div>${v(row.shift)}</div>
+            <div class="kv-item"><div class="lbl">班组</div>${v(row.team)}</div>
+            <div class="kv-item"><div class="lbl">记录人</div>${v(row.recorder)}</div>
+            <div class="kv-item"><div class="lbl">罐号</div>${v(row.tankNo)}</div>
+            <div class="kv-item"><div class="lbl">批号</div>${v(row.batchNo)}</div>
+            <div class="kv-item"><div class="lbl">进料时间</div>${v(row.feedTime)}</div>
+            <div class="kv-item"><div class="lbl">满罐时间</div>${v(row.fullTime)}</div>
+            <div class="kv-item"><div class="lbl">满罐体积</div>${v(row.fullVolume, 'm³')}</div>
+          </div>
+        </div>
+
+        <!-- 控制指标 -->
+        <div class="card">
+          <div class="card-header"><div class="card-title">控制指标</div></div>
+          <div class="kv-grid cols-3">
+            <div class="kv-item"><div class="lbl">满罐浓度</div>${v(row.fullConcentration, '%')}</div>
+            <div class="kv-item"><div class="lbl">满罐温度</div>${v(row.fullTemperature, '℃')}</div>
+            <div class="kv-item"><div class="lbl">满罐PH</div>${v(row.fullPh)}</div>
+          </div>
+        </div>
+
+        <!-- 辅料明细 -->
+        <div class="card">
+          <div class="card-header"><div class="card-title">辅料明细</div></div>
+          <div class="kv-grid cols-3">
+            <div class="kv-item"><div class="lbl">酶制剂厂家</div>${v(row.enzymeVendor)}</div>
+            <div class="kv-item"><div class="lbl">酶制剂批号</div>${v(row.enzymeBatch)}</div>
+            <div class="kv-item"><div class="lbl">酶制剂加酶量</div>${v(row.enzymeVolume, 'm³')}</div>
+            <div class="kv-item"><div class="lbl">硫酸锰厂家</div>${v(row.mnVendor)}</div>
+            <div class="kv-item"><div class="lbl">硫酸锰批号</div>${v(row.mnBatch)}</div>
+            <div class="kv-item"><div class="lbl">硫酸锰用量</div>${v(row.mnAmount, 'kg')}</div>
+          </div>
+        </div>
+
+        <!-- 出料 -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">出料</div>
+            ${qcRow ? `<span class="qc-link">📊 已关联质检单 ${qcRow.id}</span>` : ''}
+          </div>
+          <div class="kv-grid cols-3">
+            <div class="kv-item"><div class="lbl">出料时间</div>${v(row.dischargeTime)}</div>
+            <div class="kv-item"><div class="lbl">阿糖浓度</div>${v(row.altConcentration, '%')}</div>
+            <div class="kv-item"><div class="lbl">阿糖含量</div>${v(row.altContent, '%')}</div>
+            <div class="kv-item"><div class="lbl">果糖含量</div>${v(row.fructoseContent, '%')}</div>
+            <div class="kv-item"><div class="lbl">葡萄糖含量</div>${v(row.glucoseContent, '%')}</div>
+          </div>
+          ${qcRow ? `
+            <div style="padding:0 16px 16px">
+              <div style="font-size:12.5px;color:var(--text-3);line-height:1.7;background:var(--bg-soft);padding:10px 14px;border-radius:6px">
+                📊 <b>关联质检数据来源</b>：${qcRow.process} · ${qcRow.tankNo} · ${qcRow.shift} · 取样时间 ${qcRow.sampleTime} · 化验员 ${qcRow.inspector}
+                · 上述阿糖/果糖/葡萄糖含量均由该质检数据回填，可通过编辑页解除关联或重新匹配。
+              </div>
+            </div>` : ''}
+        </div>
+
+        <!-- 备注 -->
+        <div class="card">
+          <div class="card-header"><div class="card-title">备注</div></div>
+          <div style="padding:0 16px 16px; font-size:13px; color:var(--text-2); line-height:1.7">
+            ${row.remark ? escapeHtml(row.remark) : '<span class="text-3">—</span>'}
+          </div>
+        </div>
+
+        <!-- 系统信息 -->
+        <div class="card">
+          <div class="card-header"><div class="card-title">系统信息</div></div>
+          <div class="kv-grid">
+            <div class="kv-item"><div class="lbl">创建人</div>${v(row.creator)}</div>
+            <div class="kv-item"><div class="lbl">创建时间</div>${v(row.createdAt)}</div>
+            <div class="kv-item"><div class="lbl">状态</div><div class="val">${statusTag(row.status)}</div></div>
+          </div>
+        </div>
+      `;
+    }
+
+    window.confirmDel = function () {
+      confirmDialog('删除记录', `确认删除 <b>${escapeHtml(id)}</b>？`, () => {
+        toast('已删除', 'success');
+        setTimeout(() => location.href = './alt-isomer-list.html', 600);
+      });
+    };
+  </script>
+</body>
+</html>

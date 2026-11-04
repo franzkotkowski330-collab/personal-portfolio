@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>质检单详情 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const id = params.get('id') || 'QC-20260507-0023';
+    const data = MOCK.qualityList.find(x => x.id === id) || MOCK.qualityList[0];
+
+    const TYPE_MAP = {
+      fermentation: { key: 'quality-list', label: '发酵工段质检' },
+      im1: { key: 'quality-list-im1', label: '中间体检验' },
+      im2: { key: 'quality-list-im2', label: '中间体2质检' },
+      qc: { key: 'quality-list-qc', label: '质检科检验' }
+    };
+    const t = TYPE_MAP[data.type];
+    const role = localStorage.getItem('role') || '系统管理员';
+    const canEdit = (data.status === 'draft' || data.status === 'rejected');
+    const canReview = ['班组长', '生产管理人员'].includes(role) && data.status === 'submitted';
+    const canShowDiff = ['班组长', '生产管理人员', '系统管理员'].includes(role);
+
+    const page = renderLayout({
+      activeKey: t.key,
+      breadcrumb: [
+        { label: '业务工作' }, { label: '工序检验' },
+        { label: t.label, href: './list.html?type=' + data.type },
+        { label: id }
+      ]
+    });
+
+    if (data.type === 'qc') {
+      const formRows = (MOCK.inspectionFormConfigs?.QC || []).filter(r => r.enabled !== false);
+      const deviceList = (MOCK.deviceManagementList || []).filter(d => d.enabled !== false);
+      const devicesByProcess = {};
+      deviceList.forEach(d => {
+        if (!devicesByProcess[d.process]) devicesByProcess[d.process] = [];
+        if (!devicesByProcess[d.process].includes(d.name)) devicesByProcess[d.process].push(d.name);
+      });
+
+      function std(row) {
+        const hasMin = row.specMin && row.specMin !== '—';
+        const hasMax = row.specMax && row.specMax !== '—';
+        const parts = [];
+        if (hasMin) parts.push('≥ ' + row.specMin);
+        if (hasMax) parts.push('≤ ' + row.specMax);
+        const range = parts.length ? parts.join('，') : '—';
+        const u = (row.unit && row.unit !== '—') ? (' ' + row.unit) : '';
+        return range + u + (row.standard ? ('（' + row.standard + '）') : '');
+      }
+
+      const qcRows = [];
+      (data.processes || []).forEach(proc => {
+        formRows.filter(r => r.process === proc).forEach(r => qcRows.push({ ...r, _proc: proc }));
+      });
+      const grouped = {};
+      qcRows.forEach(r => {
+        if (!grouped[r._proc]) grouped[r._proc] = [];
+        grouped[r._proc].push(r);
+      });
+
+      const detailHtml = Object.keys(grouped).map(proc => {
+        const rows = grouped[proc];
+        const rowspan = rows.length;
+        const devText = (devicesByProcess[proc] && devicesByProcess[proc].length)
+          ? devicesByProcess[proc].join('、')
+          : '—';
+        return rows.map((r, idx) => `
+          <tr>
+            ${idx === 0 ? `<td rowspan="${rowspan}" style="vertical-align:middle">${proc}</td>` : ''}
+            ${idx === 0 ? `<td rowspan="${rowspan}" style="vertical-align:middle">${devText}</td>` : ''}
+            <td><b>${r.item}</b></td>
+            <td style="font-size:12.5px;color:var(--text-2)">${std(r)}</td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
+        `).join('');
+      }).join('');
+
+      page.innerHTML = `
+      <div class="card">
+        <div class="card-header"><div class="card-title">基础信息</div></div>
+        <div class="detail-meta">
+          <div class="detail-meta-item"><div class="lbl">班次</div><div class="val">${data.shift}</div></div>
+          <div class="detail-meta-item"><div class="lbl">班组</div><div class="val">${data.team}</div></div>
+          <div class="detail-meta-item"><div class="lbl">检验人</div><div class="val">${data.creator}</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><div class="card-title">检验记录列表</div></div>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th style="min-width:120px">工序</th>
+                <th style="min-width:150px">取样设备</th>
+                <th style="min-width:100px">检验项目</th>
+                <th>检验标准</th>
+                <th style="min-width:140px">测定值</th>
+                <th style="min-width:118px">检验结果</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${detailHtml || '<tr><td colspan="6" class="text-3" style="text-align:center;padding:20px">暂无检验明细</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      `;
+      window.onDel = function () {};
+      window.onApprove = function () {};
+      window.onReject = function () {};
+      window.toggleDiff = function () {};
+    } else {
+
+    // 模拟检验数据
+    const tpl = data.type === 'fermentation' ? MOCK.templates[0] : MOCK.templates[1];
+    const results = tpl.items.map((it, i) => {
+      const exceed = i === 0 && data.exceedCount > 0;
+      let val = '—';
+      if (it.dataType === '数值型') {
+        if (it.name === 'PH') val = exceed ? '7.8' : '7.1';
+        else if (it.name === 'OD值') val = '0.45';
+        else if (it.name === '温度') val = '32.5';
+        else if (it.name === '电导率') val = exceed ? '65' : '38';
+        else if (it.name === '色度') val = '15';
+        else if (it.name === '浓度') val = '12.6';
+      } else {
+        val = '正常';
+      }
+      return { ...it, val, exceed };
+    });
+
+    page.innerHTML = `
+        ${data.status === 'rejected' && data.rejectReason ? `
+        <div class="card" style="border-left:4px solid var(--danger)">
+          <div style="color:var(--danger);font-weight:500;margin-bottom:6px">✕ 已被审核驳回</div>
+          <div class="text-2">驳回原因：${data.rejectReason}</div>
+        </div>
+      ` : ''}
+
+      <div class="card">
+        <div class="card-header"><div class="card-title">基础信息</div></div>
+        <div class="detail-meta">
+          <div class="detail-meta-item"><div class="lbl">单据编号</div><div class="val">${data.id}</div></div>
+          <div class="detail-meta-item"><div class="lbl">检验日期</div><div class="val">${data.date}</div></div>
+          <div class="detail-meta-item"><div class="lbl">班次 / 班组</div><div class="val">${data.shift} / ${data.team}</div></div>
+          ${data.type === 'im1' && data.division ? `<div class="detail-meta-item"><div class="lbl">检验工序分组</div><div class="val">${data.division}</div></div>` : ''}
+          <div class="detail-meta-item"><div class="lbl">${data.type === 'im1' ? '检验工序' : '工序'}</div><div class="val">${data.processes.join('、')}</div></div>
+          <div class="detail-meta-item"><div class="lbl">取样设备</div><div class="val">${data.device}</div></div>
+          ${data.round !== '—' ? `<div class="detail-meta-item"><div class="lbl">检验次序</div><div class="val">${data.round}</div></div>` : ''}
+          <div class="detail-meta-item"><div class="lbl">创建人</div><div class="val">${data.creator}</div></div>
+          <div class="detail-meta-item"><div class="lbl">提交时间</div><div class="val">${data.submitTime}</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">检验结果 <span class="text-3" style="font-weight:400;font-size:12px">（共 ${results.length} 项）</span></div>
+        </div>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>检验项目</th>
+                <th>单位</th>
+                <th>规格</th>
+                <th>检验结果</th>
+                <th>判定</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${results.map(r => `
+                <tr ${r.exceed ? 'style="background:var(--danger-light)"' : ''}>
+                  <td><b>${r.name}</b> <span class="text-3" style="font-size:12px">${r.desc ? '· ' + r.desc : ''}</span></td>
+                  <td>${r.unit}</td>
+                  <td>${r.specMin !== '—' && r.specMax !== '—' ? `${r.specMin} ~ ${r.specMax}` : (r.specMax !== '—' ? '≤' + r.specMax : (r.specMin !== '—' ? '≥' + r.specMin : '—'))}</td>
+                  <td><b style="color:${r.exceed ? 'var(--danger)' : 'var(--text-1)'};font-size:15px">${r.val}</b></td>
+                  <td>${r.exceed ? '<span class="tag tag-red">超出规格</span>' : '<span class="tag tag-green">合格</span>'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 操作记录嵌入详情页底部 -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">📜 操作记录 <span class="text-3" style="font-weight:400;font-size:12px">（嵌入式审计追溯，按时间倒序）</span></div>
+          ${canShowDiff ? '<button class="btn btn-sm">⤓ 导出操作记录</button>' : ''}
+        </div>
+        <ul class="oplog-list">
+          ${MOCK.oplog.map((op, idx) => {
+            const isEdit = op.type === 'edit';
+            const className = op.action.includes('创建') ? 'create' :
+                              op.action.includes('提交') ? 'submit' :
+                              op.action.includes('审核') ? 'review' :
+                              op.action.includes('驳回') ? 'reject' : '';
+            return `
+              <li class="oplog-item ${className}">
+                <div class="oplog-head">
+                  <span class="time">${op.time}</span>
+                  <span class="user">${op.user}${op.user === 'SCADA系统' ? ' <span class="scada-badge">SCADA</span>' : ''}</span>
+                  <span class="action">· ${op.action}</span>
+                  ${isEdit && op.diff ? `<span class="summary">修改了 ${op.diff.length} 个字段</span>` : ''}
+                  ${isEdit && op.diff && canShowDiff ? `<span class="toggle" onclick="toggleDiff(${idx})">展开 ▾</span>` : ''}
+                  ${isEdit && op.diff && !canShowDiff ? '<span class="text-3" style="font-size:12px">（明细仅班组长及以上可见）</span>' : ''}
+                </div>
+                ${isEdit && op.diff && canShowDiff ? `
+                  <div class="oplog-detail" id="diff-${idx}">
+                    ${op.diff.map(d => `
+                      <div class="oplog-diff-row">
+                        <span class="field">${d.field}</span>
+                        <span class="old">${d.old}</span>
+                        <span class="arrow">→</span>
+                        <span class="new">${d.new}</span>
+                      </div>
+                    `).join('')}
+                  </div>
+                ` : ''}
+              </li>
+            `;
+          }).join('')}
+        </ul>
+        <div class="text-center mt-12">
+          <button class="btn btn-text">加载更多 ▼</button>
+        </div>
+      </div>
+    `;
+
+    window.toggleDiff = function (idx) {
+      const el = document.getElementById('diff-' + idx);
+      if (el) el.classList.toggle('open');
+    };
+
+    window.onApprove = function () {
+      confirmDialog('审核通过', `确认审核通过单据 <b>${id}</b>？`, () => {
+        toast('已审核通过', 'success');
+        setTimeout(() => location.reload(), 600);
+      });
+    };
+    window.onReject = function () {
+      confirmDialog('驳回单据',
+        `请输入驳回原因：<br/><textarea id="reject-reason" style="width:100%;margin-top:8px;height:80px" placeholder="请说明驳回原因..."></textarea>`,
+        () => { toast('已驳回，操作人将收到通知', 'warning'); }
+      );
+    };
+    window.onDel = function () {
+      confirmDialog('删除单据', `确定删除单据 <b>${id}</b>？删除后单据进入回收站，操作记录仍保留。`, () => {
+        toast('已删除', 'success');
+        setTimeout(() => location.href = './list.html?type=' + data.type, 800);
+      });
+    };
+    }
+  </script>
+</body>
+</html>

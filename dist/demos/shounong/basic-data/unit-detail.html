@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<link rel="icon" type="image/svg+xml" href="../../../assets/favicon.svg">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>单位详情 - 阿洛酮糖生产管理平台</title>
+  <link rel="stylesheet" href="../assets/css/main.css" />
+</head>
+<body>
+  <div id="app"></div>
+  <script src="../assets/js/menu.js"></script>
+  <script src="../assets/js/mock.js"></script>
+  <script src="../assets/js/layout.js"></script>
+  <script src="../assets/js/basic-detail.js"></script>
+  <script>
+    renderBasicDetailPage({
+      activeKey: 'basic-units',
+      listHref: './units.html',
+      listLabel: '单位管理',
+      paramKey: 'name',
+      defaultId: '%',
+      findRow: (name) => (MOCK.units || []).find(r => r.name === name),
+      title: '单位详情',
+      usage: '单位字典统一维护，供检验项目、模板配置等模块引用。',
+      fields: [
+        { key: 'name', label: '单位' },
+        { key: 'display', label: '显示名' },
+        { key: 'desc', label: '说明' },
+        { key: 'enabled', label: '状态', format: v => v ? '启用' : '停用' }
+      ]
+    });
+  </script>
+</body>
+</html>
